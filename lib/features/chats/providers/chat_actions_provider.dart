@@ -1,0 +1,265 @@
+import 'dart:io';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
+
+class ChatActions {
+  final supabase = Supabase.instance.client;
+
+
+  // Upload a document/file and send it as a message
+  Future<void> sendFileMessage({
+    required String chatId,
+    required File file,
+    required String fileName,
+  }) async {
+    final currentUserId = supabase.auth.currentUser!.id;
+
+    final storagePath = '$chatId/${const Uuid().v4()}_$fileName';
+    await supabase.storage.from('chat-media').upload(storagePath, file);
+    final publicUrl = supabase.storage.from('chat-media').getPublicUrl(storagePath);
+
+    await supabase.from('messages').insert({
+      'chat_id': chatId,
+      'sender_id': currentUserId,
+      'message_type': 'file',
+      'media_url': publicUrl,
+      'content': fileName, // shown as the file's display name
+      'status': 'sent',
+    });
+  }
+
+// Send the current GPS location as a message (a Google Maps link)
+  // Send the current GPS location as a message (a Google Maps link).
+// durationLabel is optional text like "15 minutes" chosen by the user.
+  // Send the current GPS location. liveDurationMinutes is null for a
+// one-time pin, or a number (15/60/480) for a "live" share.
+  Future<void> sendLocationMessage({
+    required String chatId,
+    required double latitude,
+    required double longitude,
+    int? liveDurationMinutes,
+  }) async {
+    final currentUserId = supabase.auth.currentUser!.id;
+    final mapUrl = 'https://www.google.com/maps?q=$latitude,$longitude';
+
+    String messageText = 'Location';
+    int? durationSecondsToStore;
+
+    if (liveDurationMinutes != null) {
+      messageText = 'Live location';
+      durationSecondsToStore = liveDurationMinutes * 60;
+    }
+
+    await supabase.from('messages').insert({
+      'chat_id': chatId,
+      'sender_id': currentUserId,
+      'message_type': 'location',
+      'media_url': mapUrl,
+      'content': messageText,
+      'duration_seconds': durationSecondsToStore, // reusing this column for live-share length
+      'status': 'sent',
+    });
+  }
+
+  // Ends an active live location share before its time runs out
+  Future<void> stopLiveLocation(String messageId) async {
+    await supabase.from('messages').update({
+      'content': 'Live location ended',
+      'duration_seconds': 0,
+    }).eq('id', messageId);
+  }
+
+  // Find an existing 1-on-1 chat between two users, or create a new one
+  Future<String> getOrCreateChat(String otherUserId) async {
+    final currentUserId = supabase.auth.currentUser!.id;
+
+    // Step 1: get all the 1-on-1 chats I am part of
+    final myChats = await supabase
+        .from('chat_members')
+        .select('chat_id, chats!inner(is_group)')
+        .eq('user_id', currentUserId)
+        .eq('chats.is_group', false);
+
+    List<String> myChatIds = [];
+    for (var row in myChats) {
+      myChatIds.add(row['chat_id'] as String);
+    }
+
+    // Step 2: check if the other user is already in one of my chats
+    if (myChatIds.isNotEmpty) {
+      final match = await supabase
+          .from('chat_members')
+          .select('chat_id')
+          .eq('user_id', otherUserId)
+          .inFilter('chat_id', myChatIds)
+          .maybeSingle();
+
+      if (match != null) {
+        String existingChatId = match['chat_id'] as String;
+        return existingChatId;
+      }
+    }
+
+    // Step 3: no existing chat found, so create a new one
+    final newChatId = const Uuid().v4();
+
+    await supabase.from('chats').insert({
+      'id': newChatId,
+      'is_group': false,
+    });
+
+    // Step 4: add both users as members of this new chat
+    await supabase.from('chat_members').insert([
+      {'chat_id': newChatId, 'user_id': currentUserId},
+      {'chat_id': newChatId, 'user_id': otherUserId},
+    ]);
+
+    return newChatId;
+  }
+
+  // Create a new GROUP chat with a name and multiple members
+  Future<String> createGroupChat({
+    required String groupName,
+    required List<String> memberIds,
+  }) async {
+    final currentUserId = supabase.auth.currentUser!.id;
+    final newChatId = const Uuid().v4();
+
+    // Step 1: create the chat row with is_group = true and the group name
+    await supabase.from('chats').insert({
+      'id': newChatId,
+      'is_group': true,
+      'name': groupName,
+    });
+
+    // Step 2: build a list of all members (me + everyone selected)
+    List<Map<String, String>> membersToAdd = [];
+    membersToAdd.add({'chat_id': newChatId, 'user_id': currentUserId});
+
+    for (var userId in memberIds) {
+      membersToAdd.add({'chat_id': newChatId, 'user_id': userId});
+    }
+
+    // Step 3: add everyone as a member in one go
+    await supabase.from('chat_members').insert(membersToAdd);
+
+    return newChatId;
+  }
+
+  // Send a message
+  Future<void> sendMessage({
+    required String chatId,
+    required String content,
+  }) async {
+    final currentUserId = supabase.auth.currentUser!.id;
+
+    await supabase.from('messages').insert({
+      'chat_id': chatId,
+      'sender_id': currentUserId,
+      'content': content,
+      'status': 'sent',
+    });
+  }
+
+  // Mark the other user's messages as 'read'
+  Future<void> markMessagesAsRead(String chatId) async {
+    final currentUserId = supabase.auth.currentUser!.id;
+
+    await supabase
+        .from('messages')
+        .update({'status': 'read'})
+        .eq('chat_id', chatId)
+        .neq('sender_id', currentUserId)
+        .neq('status', 'read');
+  }
+  // Edit an existing message's text
+  Future<void> editMessage({
+    required String messageId,
+    required String newContent,
+  }) async {
+    await supabase
+        .from('messages')
+        .update({'content': newContent})
+        .eq('id', messageId);
+  }
+
+// Delete a message permanently
+  Future<void> deleteMessage(String messageId) async {
+    await supabase.from('messages').delete().eq('id', messageId);
+  }
+  // "Delete chat" — hides it for ME only, other person still sees it normally
+  Future<void> clearChatForMe(String chatId) async {
+    final currentUserId = supabase.auth.currentUser!.id;
+
+    await supabase
+        .from('chat_members')
+        .update({'cleared_at': DateTime.now().toUtc().toIso8601String()})
+        .eq('chat_id', chatId)
+        .eq('user_id', currentUserId);
+  }
+  // Upload an image file to Supabase Storage and send it as a message
+  Future<void> sendImageMessage({
+    required String chatId,
+    required File imageFile,
+    String? caption,
+  }) async {
+    final currentUserId = supabase.auth.currentUser!.id;
+
+    // Create a unique file name so images never overwrite each other
+    final fileName = '${const Uuid().v4()}.jpg';
+    final storagePath = '$chatId/$fileName';
+
+    // Upload the file bytes to Supabase Storage
+    await supabase.storage.from('chat-media').upload(storagePath, imageFile);
+
+    // Get the public URL for this uploaded file
+    final publicUrl = supabase.storage.from('chat-media').getPublicUrl(storagePath);
+
+    // Save the message with type 'image' and the file's URL
+    await supabase.from('messages').insert({
+      'chat_id': chatId,
+      'sender_id': currentUserId,
+      'message_type': 'image',
+      'media_url': publicUrl,
+      'content': (caption != null && caption.isNotEmpty) ? caption : '📷 Photo',
+      'status': 'sent',
+    });
+  }
+  // Upload a voice recording to Supabase Storage and send it as a message
+  Future<void> sendVoiceMessage({
+    required String chatId,
+    required File audioFile,
+    required int durationSeconds,
+  }) async {
+    final currentUserId = supabase.auth.currentUser!.id;
+
+    // Unique file name, same pattern as images
+    final fileName = '${const Uuid().v4()}.m4a';
+    final storagePath = '$chatId/$fileName';
+    final minutes = durationSeconds ~/ 60;
+    final seconds = (durationSeconds % 60).toString().padLeft(2, '0');
+    final durationText = '$minutes:$seconds';
+
+    // Upload the audio file bytes to Supabase Storage (same bucket as images)
+    await supabase.storage.from('chat-media').upload(storagePath, audioFile);
+
+    // Get the public URL for this uploaded file
+    final publicUrl = supabase.storage.from('chat-media').getPublicUrl(storagePath);
+
+    // Save the message with type 'voice', the file's URL, and its duration
+    await supabase.from('messages').insert({
+      'chat_id': chatId,
+      'sender_id': currentUserId,
+      'message_type': 'voice',
+      'media_url': publicUrl,
+      'duration_seconds': durationSeconds,
+      'content': '$durationText',
+      'status': 'sent',
+    });
+  }
+}
+
+
+final chatActionsProvider = Provider<ChatActions>((ref) => ChatActions());
