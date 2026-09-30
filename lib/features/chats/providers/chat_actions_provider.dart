@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../Auto Clear Chat/auto_service.dart';
+
 class ChatActions {
   final supabase = Supabase.instance.client;
 
@@ -16,9 +18,11 @@ class ChatActions {
   }) async {
     final currentUserId = supabase.auth.currentUser!.id;
 
+
     final storagePath = '$chatId/${const Uuid().v4()}_$fileName';
     await supabase.storage.from('chat-media').upload(storagePath, file);
     final publicUrl = supabase.storage.from('chat-media').getPublicUrl(storagePath);
+    final expiresAt = await AutoClearService().calculateExpiry(chatId);
 
     await supabase.from('messages').insert({
       'chat_id': chatId,
@@ -27,6 +31,7 @@ class ChatActions {
       'media_url': publicUrl,
       'content': fileName, // shown as the file's display name
       'status': 'sent',
+      'expires_at': expiresAt?.toIso8601String(),
     });
   }
 
@@ -46,10 +51,11 @@ class ChatActions {
 
     String messageText = 'Location';
     int? durationSecondsToStore;
-
+    final expiresAt = await AutoClearService().calculateExpiry(chatId);
     if (liveDurationMinutes != null) {
       messageText = 'Live location';
       durationSecondsToStore = liveDurationMinutes * 60;
+
     }
 
     await supabase.from('messages').insert({
@@ -60,6 +66,7 @@ class ChatActions {
       'content': messageText,
       'duration_seconds': durationSecondsToStore, // reusing this column for live-share length
       'status': 'sent',
+      'expires_at': expiresAt?.toIso8601String(),
     });
   }
 
@@ -70,7 +77,26 @@ class ChatActions {
       'duration_seconds': 0,
     }).eq('id', messageId);
   }
+  // Copies one existing message into a different chat (forwarding).
+  // Works for text, image, voice, file, and location messages.
+  Future<void> forwardMessage({
+    required String targetChatId,
+    required dynamic message,
+  }) async {
+    final currentUserId = supabase.auth.currentUser!.id;
+    final expiresAt = await AutoClearService().calculateExpiry(targetChatId);
 
+    await supabase.from('messages').insert({
+      'chat_id': targetChatId,
+      'sender_id': currentUserId,
+      'message_type': message.messageType,
+      'media_url': message.mediaUrl,
+      'content': message.content,
+      'duration_seconds': message.durationSeconds,
+      'status': 'sent',
+      'expires_at': expiresAt?.toIso8601String(),
+    });
+  }
   // Find an existing 1-on-1 chat between two users, or create a new one
   Future<String> getOrCreateChat(String otherUserId) async {
     final currentUserId = supabase.auth.currentUser!.id;
@@ -154,12 +180,14 @@ class ChatActions {
     required String content,
   }) async {
     final currentUserId = supabase.auth.currentUser!.id;
+    final expiresAt = await AutoClearService().calculateExpiry(chatId);
 
     await supabase.from('messages').insert({
       'chat_id': chatId,
       'sender_id': currentUserId,
       'content': content,
       'status': 'sent',
+      'expires_at': expiresAt?.toIso8601String(),
     });
   }
 
@@ -213,6 +241,7 @@ class ChatActions {
 
     // Upload the file bytes to Supabase Storage
     await supabase.storage.from('chat-media').upload(storagePath, imageFile);
+    final expiresAt = await AutoClearService().calculateExpiry(chatId);
 
     // Get the public URL for this uploaded file
     final publicUrl = supabase.storage.from('chat-media').getPublicUrl(storagePath);
@@ -225,6 +254,7 @@ class ChatActions {
       'media_url': publicUrl,
       'content': (caption != null && caption.isNotEmpty) ? caption : '📷 Photo',
       'status': 'sent',
+      'expires_at': expiresAt?.toIso8601String(),
     });
   }
   // Upload a voice recording to Supabase Storage and send it as a message
@@ -241,9 +271,11 @@ class ChatActions {
     final minutes = durationSeconds ~/ 60;
     final seconds = (durationSeconds % 60).toString().padLeft(2, '0');
     final durationText = '$minutes:$seconds';
+    final expiresAt = await AutoClearService().calculateExpiry(chatId);
 
     // Upload the audio file bytes to Supabase Storage (same bucket as images)
     await supabase.storage.from('chat-media').upload(storagePath, audioFile);
+
 
     // Get the public URL for this uploaded file
     final publicUrl = supabase.storage.from('chat-media').getPublicUrl(storagePath);
@@ -257,6 +289,7 @@ class ChatActions {
       'duration_seconds': durationSeconds,
       'content': '$durationText',
       'status': 'sent',
+      'expires_at': expiresAt?.toIso8601String(),
     });
   }
 }

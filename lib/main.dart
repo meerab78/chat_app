@@ -61,27 +61,11 @@ class MyApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeState = ref.watch(themeProvider);
 
-    return MaterialApp(
+    return  MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Chat App',
-      themeMode: themeState.isDark ? ThemeMode.dark : ThemeMode.light,
-      theme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.light,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: themeState.seedColor,
-          brightness: Brightness.light,
-        ),
-        scaffoldBackgroundColor: AppColors.background,
-      ),
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.dark,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: themeState.seedColor,
-          brightness: Brightness.dark,
-        ),
-      ),
+      // The selected preset builds the whole app theme.
+      theme: themeState.preset.toThemeData(),
       home: const AuthGate(),
     );
   }

@@ -1,27 +1,25 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/theme_provider.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_provider.dart';
 import '../providers/all_users_provider.dart';
 import '../providers/chat_actions_provider.dart';
-import '../providers/chat_list_provider.dart';
-import 'conversation_screens.dart';
-import 'create_group_screen.dart';
 
-class NewChatScreen extends ConsumerStatefulWidget {
-  const NewChatScreen({super.key});
+// Simple contact picker used only for forwarding messages.
+// Tapping a person returns that chat's id back to the previous screen.
+class ForwardScreen extends ConsumerStatefulWidget {
+  const ForwardScreen({super.key});
 
   @override
-  ConsumerState<NewChatScreen> createState() => _NewChatScreenState();
+  ConsumerState<ForwardScreen> createState() => _ForwardScreenState();
 }
 
-class _NewChatScreenState extends ConsumerState<NewChatScreen> {
+class _ForwardScreenState extends ConsumerState<ForwardScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
+  bool _isForwarding = false; // blocks double taps while forwarding
 
-  // A small fixed palette so each avatar gets a nice, consistent color
-  // based on the user's name (not random every rebuild).
+  // Same fixed avatar palette style used across the app
   static const List<Color> _avatarPalette = [
     Color(0xFF3CB67C),
     Color(0xFF6C63FF),
@@ -46,7 +44,6 @@ class _NewChatScreenState extends ConsumerState<NewChatScreen> {
   @override
   Widget build(BuildContext context) {
     final usersAsync = ref.watch(allUsersProvider);
-    // Colors of the currently selected theme
     final p = ref.watch(themeProvider).preset;
 
     return Scaffold(
@@ -56,11 +53,8 @@ class _NewChatScreenState extends ConsumerState<NewChatScreen> {
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         title: Text(
-          'New Chat',
-          style: TextStyle(
-            color: p.textMain,
-            fontWeight: FontWeight.w700,
-          ),
+          'Forward to',
+          style: TextStyle(color: p.textMain, fontWeight: FontWeight.w700),
         ),
         iconTheme: IconThemeData(color: p.textMain),
       ),
@@ -72,7 +66,7 @@ class _NewChatScreenState extends ConsumerState<NewChatScreen> {
             children: [
               const SizedBox(height: 4),
               Text(
-                'Select a person to start chatting with',
+                'Select a person to forward to',
                 style: TextStyle(color: p.textGrey, fontSize: 13),
               ),
               const SizedBox(height: 16),
@@ -83,73 +77,27 @@ class _NewChatScreenState extends ConsumerState<NewChatScreen> {
                   color: p.surface,
                   borderRadius: BorderRadius.circular(14),
                   boxShadow: const [
-                    BoxShadow(
-                      color: AppColors.shadow,
-                      blurRadius: 10,
-                      offset: Offset(0, 4),
-                    ),
+                    BoxShadow(color: AppColors.shadow, blurRadius: 10, offset: Offset(0, 4)),
                   ],
                 ),
                 child: TextField(
                   controller: _searchController,
-                  onChanged: (value) =>
-                      setState(() => _query = value.trim().toLowerCase()),
+                  onChanged: (value) => setState(() => _query = value.trim().toLowerCase()),
                   style: TextStyle(color: p.textMain),
                   decoration: InputDecoration(
                     hintText: 'Search by name or email',
                     hintStyle: TextStyle(color: p.icon, fontSize: 14),
                     prefixIcon: Icon(Icons.search, color: p.icon),
                     border: InputBorder.none,
-                    contentPadding:
-                    const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
                   ),
-                ),
-              ),
-
-              const SizedBox(height: 14),
-
-              // ---- New group row ----
-              Container(
-                decoration: BoxDecoration(
-                  color: p.surface,
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: AppColors.shadow,
-                      blurRadius: 10,
-                      offset: Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: p.primary,
-                    child: const Icon(Icons.group_add, color: Colors.white),
-                  ),
-                  title: Text(
-                    'New group',
-                    style: TextStyle(
-                      color: p.textMain,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const CreateGroupScreen()),
-                    );
-                  },
                 ),
               ),
 
               const SizedBox(height: 16),
               Text(
                 'Contacts on app',
-                style: TextStyle(
-                  color: p.textMain,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: p.textMain, fontWeight: FontWeight.w700, fontSize: 14),
               ),
               const SizedBox(height: 10),
 
@@ -166,17 +114,10 @@ class _NewChatScreenState extends ConsumerState<NewChatScreen> {
                         .toList();
 
                     if (users.isEmpty) {
-                      return _EmptyState(
-                        icon: Icons.person_off_outlined,
-                        message: 'No other users found',
-                      );
+                      return _EmptyState(icon: Icons.person_off_outlined, message: 'No other users found');
                     }
-
                     if (filtered.isEmpty) {
-                      return _EmptyState(
-                        icon: Icons.search_off,
-                        message: 'No matches for "$_query"',
-                      );
+                      return _EmptyState(icon: Icons.search_off, message: 'No matches for "$_query"');
                     }
 
                     return Container(
@@ -184,22 +125,14 @@ class _NewChatScreenState extends ConsumerState<NewChatScreen> {
                         color: p.surface,
                         borderRadius: BorderRadius.circular(18),
                         boxShadow: const [
-                          BoxShadow(
-                            color: AppColors.shadow,
-                            blurRadius: 14,
-                            offset: Offset(0, 6),
-                          ),
+                          BoxShadow(color: AppColors.shadow, blurRadius: 14, offset: Offset(0, 6)),
                         ],
                       ),
                       clipBehavior: Clip.antiAlias,
                       child: ListView.separated(
                         padding: const EdgeInsets.symmetric(vertical: 6),
                         itemCount: filtered.length,
-                        separatorBuilder: (_, __) => Divider(
-                          height: 1,
-                          indent: 72,
-                          color: p.divider,
-                        ),
+                        separatorBuilder: (_, __) => Divider(height: 1, indent: 72, color: p.divider),
                         itemBuilder: (context, index) {
                           final user = filtered[index];
                           final avatarColor = _colorForName(user.name);
@@ -207,20 +140,16 @@ class _NewChatScreenState extends ConsumerState<NewChatScreen> {
                           return Material(
                             color: Colors.transparent,
                             child: InkWell(
-                              onTap: () => _onUserTap(context, user),
+                              onTap: () => _onUserTap(user),
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 16, vertical: 10),
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                                 child: Row(
                                   children: [
                                     CircleAvatar(
                                       radius: 22,
-                                      backgroundColor:
-                                      avatarColor.withOpacity(0.15),
+                                      backgroundColor: avatarColor.withOpacity(0.15),
                                       child: Text(
-                                        user.name.isNotEmpty
-                                            ? user.name[0].toUpperCase()
-                                            : '?',
+                                        user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
                                         style: TextStyle(
                                           color: avatarColor,
                                           fontWeight: FontWeight.w700,
@@ -231,8 +160,7 @@ class _NewChatScreenState extends ConsumerState<NewChatScreen> {
                                     const SizedBox(width: 14),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(
                                             user.name,
@@ -247,19 +175,12 @@ class _NewChatScreenState extends ConsumerState<NewChatScreen> {
                                             user.email,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              color: p.textGrey,
-                                              fontSize: 12.5,
-                                            ),
+                                            style: TextStyle(color: p.textGrey, fontSize: 12.5),
                                           ),
                                         ],
                                       ),
                                     ),
-                                    Icon(
-                                      Icons.chevron_right,
-                                      color: p.icon,
-                                      size: 20,
-                                    ),
+                                    Icon(Icons.chevron_right, color: p.icon, size: 20),
                                   ],
                                 ),
                               ),
@@ -269,13 +190,8 @@ class _NewChatScreenState extends ConsumerState<NewChatScreen> {
                       ),
                     );
                   },
-                  loading: () => Center(
-                    child: CircularProgressIndicator(color: p.primary),
-                  ),
-                  error: (err, stack) => _EmptyState(
-                    icon: Icons.error_outline,
-                    message: 'Error: $err',
-                  ),
+                  loading: () => Center(child: CircularProgressIndicator(color: p.primary)),
+                  error: (err, stack) => _EmptyState(icon: Icons.error_outline, message: 'Error: $err'),
                 ),
               ),
               const SizedBox(height: 12),
@@ -286,43 +202,29 @@ class _NewChatScreenState extends ConsumerState<NewChatScreen> {
     );
   }
 
-  // ---- Same logic as before, just moved into its own method ----
-  Future<void> _onUserTap(BuildContext context, dynamic user) async {
-    final p = ref.read(themeProvider).preset;
+  Future<void> _onUserTap(dynamic user) async {
+    if (_isForwarding) return; // block double-tap while already forwarding
+    setState(() => _isForwarding = true);
 
+    final p = ref.read(themeProvider).preset;
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => Center(
-        child: CircularProgressIndicator(color: p.primary),
-      ),
+      builder: (_) => Center(child: CircularProgressIndicator(color: p.primary)),
     );
 
     try {
       final chatId = await ref.read(chatActionsProvider).getOrCreateChat(user.id);
-
-      if (!context.mounted) return;
+      if (!mounted) return;
       Navigator.pop(context); // close loading dialog
-
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ConversationScreen(
-            chatId: chatId,
-            otherUserName: user.name,
-          ),
-        ),
-      );
-      ref.invalidate(chatListProvider);
+      Navigator.pop(context, chatId); // return the chosen chat id to ConversationScreen
     } catch (e) {
-      debugPrint('getOrCreateChat error: $e');
-
-      if (!context.mounted) return;
-      Navigator.pop(context); // close loading dialog even on error
-
+      if (!mounted) return;
+      Navigator.pop(context); // close loading dialog
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to start chat: $e')),
+        SnackBar(content: Text('Failed to forward: $e')),
       );
+      setState(() => _isForwarding = false);
     }
   }
 }
@@ -344,11 +246,7 @@ class _EmptyState extends ConsumerWidget {
         children: [
           Icon(icon, size: 40, color: p.icon),
           const SizedBox(height: 10),
-          Text(
-            message,
-            style: TextStyle(color: p.textGrey),
-            textAlign: TextAlign.center,
-          ),
+          Text(message, style: TextStyle(color: p.textGrey), textAlign: TextAlign.center),
         ],
       ),
     );

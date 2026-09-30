@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/shared/widgets/chat_tile.dart';
+import '../../core/theme/theme_provider.dart';
 import '../../core/utils/app_dialogs.dart';
 import '../../core/utils/time_formatter.dart';
+import '../chat lock/provider.dart';
+import '../chat lock/screens/enter_pin_view.dart';
+import '../chat lock/screens/set_pin_view.dart';
 import '../chats/providers/chat_actions_provider.dart';
 import '../chats/providers/chat_list_provider.dart';
 import '../chats/providers/chat_list_refresh_provider.dart';
@@ -30,7 +34,6 @@ Color avatarColorFor(String name) {
 
 class HomeView extends ConsumerStatefulWidget {
   const HomeView({super.key});
-
   @override
   ConsumerState<HomeView> createState() => _HomeViewState();
 }
@@ -45,15 +48,56 @@ class _HomeViewState extends ConsumerState<HomeView> {
     _searchController.dispose();
     super.dispose();
   }
+  Future<void> _handleChatTap(
+      BuildContext context,
+      WidgetRef ref,
+      dynamic chat,
+      String name,
+      bool isLocked,
+      ) async {
+    if (isLocked && !ref.read(chatLockProvider.notifier).isUnlockedNow(chat.id)) {
+      final success = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const EnterPinScreen(
+            title: 'Locked Chat',
+            subtitle: 'Enter your PIN to open this chat.',
+          ),
+        ),
+      );
+      if (success != true) return;
+      ref.read(chatLockProvider.notifier).markUnlocked(chat.id);
+    }
+    if (!context.mounted) return;
 
-  void _showNewChatOptions(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ConversationScreen(
+          chatId: chat.id,
+          otherUserName: name,
+          isGroup: chat.isGroup,
+        ),
+      ),
+    );
+  }
+
+  void _showChatOptionsSheet(
+      BuildContext context,
+      WidgetRef ref,
+      dynamic chat,
+      bool isLocked,
+      ) {
+    final name = chat.otherUserName ?? 'Unknown';
+
+    final p = ref.read(themeProvider).preset;
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: p.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (_) {
+      builder: (sheetContext) {
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
@@ -64,36 +108,54 @@ class _HomeViewState extends ConsumerState<HomeView> {
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: ChatUi.line,
+                    color: Colors.grey.shade300,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
                 const SizedBox(height: 16),
-                _sheetOption(
-                  icon: Icons.person_outline_rounded,
-                  title: 'New Chat',
-                  subtitle: 'Message someone directly',
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    name,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      color: p.textGrey,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Lock / Unlock option
+                _sheetActionTile(
+                  icon: isLocked ? Icons.lock_open_rounded : Icons.lock_outline_rounded,
+                  iconBg: Colors.blue.withOpacity(0.12),
+                  iconColor: Colors.blue,
+                  title: isLocked ? 'Unlock chat' : 'Lock chat',
+                  subtitle: isLocked
+                      ? 'Remove the PIN lock from this chat'
+                      : 'Protect this chat with a PIN',
                   onTap: () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const NewChatScreen()),
-                    );
+                    Navigator.pop(sheetContext);
+                    _handleLockToggle(context, ref, chat, isLocked);
                   },
                 ),
-                _sheetOption(
-                  icon: Icons.group_outlined,
-                  title: 'New Group',
-                  subtitle: 'Create a group with multiple people',
+                const SizedBox(height: 8),
+
+                // Delete option
+                _sheetActionTile(
+                  icon: Icons.delete_outline_rounded,
+                  iconBg: Colors.red.withOpacity(0.10),
+                  iconColor: Colors.redAccent,
+                  title: 'Delete chat',
+                  subtitle: 'Remove this chat from your list',
+                  titleColor: Colors.redAccent,
                   onTap: () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => const CreateGroupScreen()),
-                    );
+                    Navigator.pop(sheetContext);
+                    _deleteChat(context, ref, chat);
                   },
                 ),
+                const SizedBox(height: 8),
               ],
             ),
           ),
@@ -102,38 +164,100 @@ class _HomeViewState extends ConsumerState<HomeView> {
     );
   }
 
-  Widget _sheetOption({
+  // One row inside the options sheet: circle icon + title + subtitle
+  Widget _sheetActionTile({
     required IconData icon,
+    required Color iconBg,
+    required Color iconColor,
     required String title,
     required String subtitle,
     required VoidCallback onTap,
+    Color? titleColor,
   }) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      onTap: onTap,
-      leading: Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          color: ChatUi.accent.withOpacity(0.12),
-          shape: BoxShape.circle,
+    final p = ref.read(themeProvider).preset;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
+                child: Icon(icon, color: iconColor, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: titleColor ?? p.textMain),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(color: p.textGrey, fontSize: 12.5),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
-        child: Icon(icon, color: ChatUi.accentDark),
-      ),
-      title: Text(
-        title,
-        style: const TextStyle(fontWeight: FontWeight.w600, color: ChatUi.ink),
-      ),
-      subtitle: Text(
-        subtitle,
-        style: const TextStyle(color: ChatUi.muted, fontSize: 13),
       ),
     );
   }
 
+  Future<void> _handleLockToggle(
+      BuildContext context,
+      WidgetRef ref,
+      dynamic chat,
+      bool isLocked,
+      ) async {
+    final notifier = ref.read(chatLockProvider.notifier);
+
+    if (isLocked) {
+      final success = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const EnterPinScreen(
+            title: 'Unlock Chat',
+            subtitle: 'Enter your PIN to remove the lock on this chat.',
+          ),
+        ),
+      );
+      if (success == true) {
+        await notifier.removeLock(chat.id);
+      }
+      return;
+    }
+
+    final hasPin = await notifier.hasPinSet();
+    if (!hasPin) {
+      if (!context.mounted) return;
+      final created = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(builder: (_) => const SetPinScreen()),
+      );
+      if (created != true) return;
+    }
+
+    await notifier.lockChat(chat.id);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Chat locked')));
+    }
+  }
   Future<void> _deleteChat(
       BuildContext context, WidgetRef ref, dynamic chat) async {
     final name = chat.otherUserName ?? 'this chat';
+
 
     final confirmed = await AppDialogs.confirmDeleteChat(context, name);
     if (!confirmed || !context.mounted) return;
@@ -160,6 +284,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
   Widget build(BuildContext context) {
     final chatsAsync = ref.watch(chatListProvider);
     ref.watch(chatListRefresherProvider);
+    final p = ref.watch(themeProvider).preset;
 
     final List<Widget> chatSlivers = chatsAsync.when(
       data: (chats) {
@@ -208,6 +333,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
                   final int idx = i ~/ 2;
                   final chat = visible[idx];
                   final name = chat.otherUserName ?? 'Unknown';
+                  final isLocked = ref.watch(chatLockProvider).lockedChatIds.contains(chat.id);
 
                   // Swipe left = delete (long press bhi pehle jaisa chalega)
                   return Dismissible(
@@ -227,7 +353,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
                     child: ChatTile(
                       index: idx,
                       name: name,
-                      lastMessage: chat.lastMessage,
+                      lastMessage: isLocked ? ' Locked chat' : chat.lastMessage,
                       time: chat.lastMessageAt != null
                           ? formatMessageTime(chat.lastMessageAt!)
                           : null,
@@ -235,17 +361,8 @@ class _HomeViewState extends ConsumerState<HomeView> {
                       isGroup: chat.isGroup,
                       avatarColor:
                       chat.isGroup ? Colors.teal : avatarColorFor(name),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ConversationScreen(
-                            chatId: chat.id,
-                            otherUserName: name,
-                            isGroup: chat.isGroup,
-                          ),
-                        ),
-                      ),
-                      onLongPress: () => _deleteChat(context, ref, chat),
+                      onTap: () => _handleChatTap(context, ref, chat, name, isLocked),
+                      onLongPress: () => _showChatOptionsSheet(context, ref, chat, isLocked),
                     ),
                   );
                 },
@@ -256,12 +373,12 @@ class _HomeViewState extends ConsumerState<HomeView> {
         ];
       },
       loading: () => <Widget>[
-        const SliverFillRemaining(
+        SliverFillRemaining(
           hasScrollBody: false,
           child: Center(
             child: CircularProgressIndicator(
               strokeWidth: 3,
-              color: kHeaderColor,
+              color: p.primary,
             ),
           ),
         ),
@@ -282,9 +399,9 @@ class _HomeViewState extends ConsumerState<HomeView> {
         if (shouldExit) SystemNavigator.pop(); // closes the app
       },
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: p.surface,
         floatingActionButton: FloatingActionButton(
-          backgroundColor: kAccentColor,
+          backgroundColor: p.accent,
           elevation: 2,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
           onPressed: () {

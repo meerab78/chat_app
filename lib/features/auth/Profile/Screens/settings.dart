@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/theme_provider.dart';
+import '../../../../core/theme/app_theme_presets.dart';
 import '../../controller.dart';
+
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -9,70 +11,70 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeState = ref.watch(themeProvider);
     final notifier = ref.read(themeProvider.notifier);
+    final preset = themeState.preset;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          const Text('App Theme', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+          Text(
+            'Choose Theme',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+              color: preset.textMain,
+            ),
+          ),
           const SizedBox(height: 4),
           Text(
-            'Pick the color you want the app to use',
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 12.5),
+            'Pick a theme and the whole app will change',
+            style: TextStyle(color: preset.textGrey, fontSize: 12.5),
           ),
           const SizedBox(height: 16),
-
-          // ---- 5 color swatches to choose from ----
           Wrap(
             spacing: 16,
             runSpacing: 16,
-            children: List.generate(appThemes.length, (index) {
-              final option = appThemes[index];
-              final isSelected = themeState.themeIndex == index;
+            children: List.generate(appPresets.length, (index) {
+              final option = appPresets[index];
+              final isSelected = themeState.presetIndex == index;
 
               return GestureDetector(
-                onTap: () => notifier.setColor(index),
+                // Save the theme and apply it to the whole app
+                onTap: () => notifier.setPreset(index),
                 child: Column(
                   children: [
                     Container(
-                      width: 52,
-                      height: 52,
+                      width: 72,
+                      height: 72,
                       decoration: BoxDecoration(
-                        color: option.color,
-                        shape: BoxShape.circle,
-                        border: isSelected
-                            ? Border.all(color: Colors.black87, width: 3)
-                            : null,
+                        color: option.background, // preview of the theme background
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isSelected ? option.primary : option.divider,
+                          width: isSelected ? 3 : 1,
+                        ),
                       ),
-                      child: isSelected
-                          ? const Icon(Icons.check, color: Colors.white)
-                          : null,
+                      child: Center(
+                        child: CircleAvatar(
+                          radius: 14,
+                          backgroundColor: option.primary,
+                          child: isSelected
+                              ? Icon(Icons.check, size: 16, color: option.onPrimary)
+                              : null,
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 6),
-                    Text(option.name, style: const TextStyle(fontSize: 11)),
+                    Text(
+                      option.name,
+                      style: TextStyle(fontSize: 11, color: preset.textMain),
+                    ),
                   ],
                 ),
               );
             }),
           ),
-
-          const SizedBox(height: 32),
-          const Divider(),
-          const SizedBox(height: 12),
-
-          // ---- Dark mode toggle ----
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Dark Mode'),
-            subtitle: const Text('Switch between light and dark appearance'),
-            value: themeState.isDark,
-            onChanged: notifier.setDark,
-          ),
-
-          const SizedBox(height: 20),
-          const Divider(),
-          const SizedBox(height: 12),
         ],
       ),
     );
