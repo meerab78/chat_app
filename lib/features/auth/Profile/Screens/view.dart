@@ -22,7 +22,8 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final profileAsync = ref.watch(myProfileProvider);
     final theme = ref.watch(themeProvider);
-    final headerColor = theme.seedColor;
+    final p = theme.preset;
+    final headerColor = p.primary;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -135,7 +136,7 @@ class ProfileScreen extends ConsumerWidget {
                         const SizedBox(height: 4),
                         Text(
                           email,
-                          style: TextStyle(color: Colors.grey.shade600, fontSize: 13.5),
+                          style: TextStyle(color: p.textGrey, fontSize: 13.5),
                         ),
                       ],
                     ),
@@ -151,7 +152,7 @@ class ProfileScreen extends ConsumerWidget {
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
-                        color: Colors.grey.shade800,
+                        color: p.textMain,
                         letterSpacing: 0.2,
                       ),
                     ),
@@ -164,7 +165,7 @@ class ProfileScreen extends ConsumerWidget {
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: Theme.of(context).cardColor,
+                        color: p.surface,
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
@@ -228,7 +229,7 @@ class _TileDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Divider(height: 1, indent: 66, color: Colors.grey.shade100);
+    return Divider(height: 1, indent: 66, color: Theme.of(context).dividerColor);
   }
 }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/shared/widgets/chat_tile.dart';
+import '../../core/theme/theme_provider.dart';
 import '../../core/utils/time_formatter.dart';
 
 import '../chats/providers/chat_list_provider.dart';
@@ -26,6 +27,7 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen> {
   @override
   Widget build(BuildContext context) {
     final chatsAsync = ref.watch(chatListProvider);
+    final p = ref.watch(themeProvider).preset;
 
     final List<Widget> groupSlivers = chatsAsync.when(
       data: (chats) {
@@ -115,12 +117,12 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen> {
         ];
       },
       loading: () => <Widget>[
-        const SliverFillRemaining(
+        SliverFillRemaining(
           hasScrollBody: false,
           child: Center(
             child: CircularProgressIndicator(
               strokeWidth: 3,
-              color: ChatUi.accentDark,
+              color: p.primary,
             ),
           ),
         ),
@@ -134,7 +136,7 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen> {
     );
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: p.surface,
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,

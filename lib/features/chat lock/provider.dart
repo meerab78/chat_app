@@ -1,6 +1,6 @@
 import 'package:chat_app/features/chat%20lock/service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 // How long a chat stays open after a correct PIN, before it locks again
 const Duration kUnlockDuration = Duration(minutes: 10);
@@ -28,14 +28,31 @@ class ChatLockState {
 class ChatLockNotifier extends Notifier<ChatLockState> {
   final _service = ChatLockService();
 
+  // Which user the current state belongs to
+  String? _userId;
+
   @override
   ChatLockState build() {
-    // Load which chats are locked as soon as the app starts
+    _userId = Supabase.instance.client.auth.currentUser?.id;
+
+    // When a different user logs in (or the user logs out), forget everything
+    // and load the new user's locks
+    final sub = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      final newId = data.session?.user.id;
+      if (newId == _userId) return; // same user (e.g. token refresh), do nothing
+      _userId = newId;
+      state = const ChatLockState();
+      _loadLockedIds();
+    });
+    ref.onDispose(sub.cancel);
+
     _loadLockedIds();
     return const ChatLockState();
   }
 
   Future<void> _loadLockedIds() async {
+    // Not logged in yet, so there is nothing to load
+    if (Supabase.instance.client.auth.currentUser == null) return;
     final ids = await _service.getLockedChatIds();
     state = state.copyWith(lockedChatIds: ids);
   }
@@ -48,16 +65,15 @@ class ChatLockNotifier extends Notifier<ChatLockState> {
     return expiry != null && expiry.isAfter(DateTime.now());
   }
 
-  Future<bool> hasPinSet() async {
-    final pin = await _service.getPin();
-    return pin != null && pin.isNotEmpty;
+  // Sets the PIN for this chat and locks it
+  Future<void> lockChat(String chatId, String pin) async {
+    await _service.saveLock(chatId, pin);
+    final updated = Set<String>.from(state.lockedChatIds)..add(chatId);
+    state = state.copyWith(lockedChatIds: updated);
   }
 
-  Future<void> setPin(String pin) => _service.savePin(pin);
-
-  Future<bool> verifyPin(String pin) async {
-    final saved = await _service.getPin();
-    return saved != null && saved == pin;
+  Future<bool> verifyPin(String chatId, String pin) {
+    return _service.verifyPin(chatId, pin);
   }
 
   // Called after the user enters the correct PIN for a specific chat
@@ -67,14 +83,9 @@ class ChatLockNotifier extends Notifier<ChatLockState> {
     state = state.copyWith(unlockedUntil: updated);
   }
 
-  Future<void> lockChat(String chatId) async {
-    final updated = Set<String>.from(state.lockedChatIds)..add(chatId);
-    state = state.copyWith(lockedChatIds: updated);
-    await _service.saveLockedChatIds(updated);
-  }
-
   // Removes the lock entirely. The caller must verify the PIN before calling this.
   Future<void> removeLock(String chatId) async {
+    await _service.deleteLock(chatId);
     final updatedLocked = Set<String>.from(state.lockedChatIds)..remove(chatId);
     final updatedUnlocked = Map<String, DateTime>.from(state.unlockedUntil)
       ..remove(chatId);
@@ -82,7 +93,6 @@ class ChatLockNotifier extends Notifier<ChatLockState> {
       lockedChatIds: updatedLocked,
       unlockedUntil: updatedUnlocked,
     );
-    await _service.saveLockedChatIds(updatedLocked);
   }
 }
 

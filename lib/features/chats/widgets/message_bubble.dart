@@ -79,7 +79,9 @@ class MessageBubble extends ConsumerWidget {
               maxWidth: MediaQuery.of(context).size.width * 0.78,
             ),
             decoration: BoxDecoration(
-              color: isMe ? p.myBubble : p.otherBubble,
+              color: isSelected
+                  ? p.primary.withOpacity(0.18)
+                  : (isMe ? p.myBubble : p.otherBubble),
               borderRadius: BorderRadius.only(
                 topLeft: const Radius.circular(10),
                 topRight: const Radius.circular(10),
@@ -328,6 +330,33 @@ class MessageBubble extends ConsumerWidget {
             ),
           ),
         ),
+          if (selectionMode)
+            Positioned(
+              left: isMe ? null : 2,
+              right: isMe ? 2 : null,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: Container(
+                  width: 24,
+                  height: 24,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(color: Colors.black26, blurRadius: 3),
+                    ],
+                  ),
+                  child: Checkbox(
+                    value: isSelected,
+                    onChanged: (_) => onToggleSelect?.call(),
+                    activeColor: p.primary,
+                    shape: const CircleBorder(),
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+              ),
+            ),
         ],
       )
     );

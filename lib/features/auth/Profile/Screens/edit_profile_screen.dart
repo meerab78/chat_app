@@ -72,10 +72,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(myProfileProvider);
-    final headerColor = ref.watch(themeProvider).seedColor;
+    final p = ref.watch(themeProvider).preset;
+    final headerColor = p.primary;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: p.background,
       body: Center(
         child: SafeArea(
           child: SingleChildScrollView(

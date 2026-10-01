@@ -5,17 +5,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/shared/widgets/custom_button.dart';
 import '../../../core/shared/widgets/custom_text_field.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/theme_provider.dart';
 import '../../auth/widget/auth_header.dart';
 import '../provider.dart';
-// Asks for the PIN. Pops with `true` if the entered PIN was correct.
+
+// Asks for the PIN of ONE chat. Pops with `true` if the PIN was correct.
 class EnterPinScreen extends ConsumerStatefulWidget {
+  final String chatId;
   final String title;
   final String subtitle;
 
   const EnterPinScreen({
     super.key,
+    required this.chatId,
     this.title = 'Enter PIN',
-    this.subtitle = 'Enter your 4-digit PIN to continue.',
+    this.subtitle = 'Enter the 4-digit PIN for this chat.',
   });
 
   @override
@@ -45,7 +49,19 @@ class _EnterPinScreenState extends ConsumerState<EnterPinScreen> {
       _isChecking = true;
     });
 
-    final correct = await ref.read(chatLockProvider.notifier).verifyPin(pin);
+    bool correct = false;
+    try {
+      correct = await ref
+          .read(chatLockProvider.notifier)
+          .verifyPin(widget.chatId, pin);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isChecking = false;
+        _error = 'Could not check PIN, check your internet';
+      });
+      return;
+    }
 
     if (!mounted) return;
     setState(() => _isChecking = false);
@@ -60,8 +76,10 @@ class _EnterPinScreenState extends ConsumerState<EnterPinScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final p = ref.watch(themeProvider).preset;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: p.background,
       body: Center(
         child: SafeArea(
           child: SingleChildScrollView(

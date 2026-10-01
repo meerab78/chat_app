@@ -97,6 +97,39 @@ class ChatActions {
       'expires_at': expiresAt?.toIso8601String(),
     });
   }
+
+  // Renames a group (admin only — screen enforces this before calling)
+  Future<void> updateGroupName({
+    required String chatId,
+    required String newName,
+  }) async {
+    await supabase.from('chats').update({'name': newName}).eq('id', chatId);
+  }
+
+  // Uploads a new group photo and saves its URL
+  Future<void> updateGroupAvatar({
+    required String chatId,
+    required File imageFile,
+  }) async {
+    final fileName = '${const Uuid().v4()}.jpg';
+    final storagePath = 'group-avatars/$chatId/$fileName';
+
+    await supabase.storage.from('chat-media').upload(storagePath, imageFile);
+    final publicUrl = supabase.storage.from('chat-media').getPublicUrl(storagePath);
+
+    await supabase.from('chats').update({'avatar_url': publicUrl}).eq('id', chatId);
+  }
+
+  // Removes me from a group's member list
+  Future<void> leaveGroup(String chatId) async {
+    final currentUserId = supabase.auth.currentUser!.id;
+    await supabase
+        .from('chat_members')
+        .delete()
+        .eq('chat_id', chatId)
+        .eq('user_id', currentUserId);
+  }
+
   // Find an existing 1-on-1 chat between two users, or create a new one
   Future<String> getOrCreateChat(String otherUserId) async {
     final currentUserId = supabase.auth.currentUser!.id;
@@ -158,6 +191,7 @@ class ChatActions {
       'id': newChatId,
       'is_group': true,
       'name': groupName,
+      'created_by': currentUserId,
     });
 
     // Step 2: build a list of all members (me + everyone selected)

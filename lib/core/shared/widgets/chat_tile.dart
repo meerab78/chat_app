@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../theme/theme_provider.dart';
 
 class ChatUi {
   static const Color ink = Color(0xFF111B21);
@@ -10,34 +12,45 @@ class ChatUi {
   static const Color accentDark = Color(0xFF075E54);
 
   static Widget sliverHeader(String title) {
-    return SliverAppBar(
-      pinned: true,
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.transparent,
-      elevation: 0,
-      scrolledUnderElevation: 0,
-      systemOverlayStyle: SystemUiOverlayStyle.dark,
-      toolbarHeight: 48,
-      expandedHeight: 68, // pehle 96 tha, isi se upar ka space kam hua
-      flexibleSpace: FlexibleSpaceBar(
-        expandedTitleScale: 1.35,
-        titlePadding: const EdgeInsetsDirectional.only(start: 20, bottom: 10),
-        title: Text(
-          title,
-          style: const TextStyle(
-            color: ink,
-            fontSize: 22,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.6,
+    // Consumer lets this static method read the selected theme
+    return Consumer(
+      builder: (context, ref, _) {
+        final p = ref.watch(themeProvider).preset;
+
+        return SliverAppBar(
+          pinned: true,
+          backgroundColor: p.surface,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          // Light status bar icons on dark theme, dark icons on light theme
+          systemOverlayStyle: p.brightness == Brightness.dark
+              ? SystemUiOverlayStyle.light
+              : SystemUiOverlayStyle.dark,
+          toolbarHeight: 48,
+          expandedHeight: 68, // pehle 96 tha, isi se upar ka space kam hua
+          flexibleSpace: FlexibleSpaceBar(
+            expandedTitleScale: 1.35,
+            titlePadding:
+            const EdgeInsetsDirectional.only(start: 20, bottom: 10),
+            title: Text(
+              title,
+              style: TextStyle(
+                color: p.textMain,
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.6,
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
 
 // ---------- Search field ----------
-class ChatSearchField extends StatelessWidget {
+class ChatSearchField extends ConsumerWidget {
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
   final String hint;
@@ -50,25 +63,26 @@ class ChatSearchField extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = ref.watch(themeProvider).preset;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
       child: TextField(
         controller: controller,
         onChanged: onChanged,
         textInputAction: TextInputAction.search,
-        style: const TextStyle(fontSize: 15, color: ChatUi.ink),
+        style: TextStyle(fontSize: 15, color: p.textMain),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: const TextStyle(color: ChatUi.muted, fontSize: 15),
-          prefixIcon: const Icon(Icons.search_rounded, color: ChatUi.muted),
+          hintStyle: TextStyle(color: p.textGrey, fontSize: 15),
+          prefixIcon: Icon(Icons.search_rounded, color: p.textGrey),
           suffixIcon: ValueListenableBuilder<TextEditingValue>(
             valueListenable: controller,
             builder: (_, value, __) {
               if (value.text.isEmpty) return const SizedBox.shrink();
               return IconButton(
-                icon: const Icon(Icons.close_rounded,
-                    size: 20, color: ChatUi.muted),
+                icon: Icon(Icons.close_rounded, size: 20, color: p.textGrey),
                 onPressed: () {
                   controller.clear();
                   onChanged('');
@@ -77,7 +91,7 @@ class ChatSearchField extends StatelessWidget {
             },
           ),
           filled: true,
-          fillColor: ChatUi.surface,
+          fillColor: p.inputField,
           isDense: true,
           contentPadding: const EdgeInsets.symmetric(vertical: 12),
           border: OutlineInputBorder(
@@ -91,7 +105,7 @@ class ChatSearchField extends StatelessWidget {
 }
 
 // ---------- Filter chips ----------
-class ChatFilterChips extends StatelessWidget {
+class ChatFilterChips extends ConsumerWidget {
   final List<String> labels;
   final int selected;
   final ValueChanged<int> onSelected;
@@ -104,7 +118,9 @@ class ChatFilterChips extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = ref.watch(themeProvider).preset;
+
     return SizedBox(
       height: 38,
       child: ListView.separated(
@@ -121,7 +137,7 @@ class ChatFilterChips extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: isSelected ? ChatUi.accentDark : ChatUi.surface,
+                color: isSelected ? p.header : p.inputField,
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
@@ -129,7 +145,7 @@ class ChatFilterChips extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 13.5,
                   fontWeight: FontWeight.w600,
-                  color: isSelected ? Colors.white : ChatUi.muted,
+                  color: isSelected ? Colors.white : p.textGrey,
                 ),
               ),
             ),
@@ -141,7 +157,7 @@ class ChatFilterChips extends StatelessWidget {
 }
 
 // ---------- Chat tile ----------
-class ChatTile extends StatelessWidget {
+class ChatTile extends ConsumerWidget {
   final String name;
   final String? lastMessage;
   final String? time;
@@ -166,7 +182,8 @@ class ChatTile extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = ref.watch(themeProvider).preset;
     final bool hasUnread = unreadCount > 0;
     final String badge = unreadCount > 99 ? '99+' : '$unreadCount';
     final int ms = 220 + (index < 10 ? index : 10) * 40;
@@ -192,7 +209,7 @@ class ChatTile extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: hasUnread ? ChatUi.accent : Colors.transparent,
+                    color: hasUnread ? p.accent : Colors.transparent,
                     width: 2,
                   ),
                 ),
@@ -228,7 +245,7 @@ class ChatTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: ChatUi.ink,
+                        color: p.textMain,
                         fontSize: 16,
                         fontWeight:
                         hasUnread ? FontWeight.w700 : FontWeight.w600,
@@ -240,7 +257,7 @@ class ChatTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: hasUnread ? ChatUi.ink : ChatUi.muted,
+                        color: hasUnread ? p.textMain : p.textGrey,
                         fontSize: 14,
                         fontWeight:
                         hasUnread ? FontWeight.w500 : FontWeight.normal,
@@ -264,7 +281,7 @@ class ChatTile extends StatelessWidget {
                       time!,
                       style: TextStyle(
                         fontSize: 12,
-                        color: hasUnread ? ChatUi.accentDark : ChatUi.muted,
+                        color: hasUnread ? p.primary : p.textGrey,
                         fontWeight:
                         hasUnread ? FontWeight.w700 : FontWeight.normal,
                       ),
@@ -276,7 +293,7 @@ class ChatTile extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: ChatUi.accent,
+                        color: p.accent,
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
@@ -300,19 +317,20 @@ class ChatTile extends StatelessWidget {
   }
 }
 
-class ChatDivider extends StatelessWidget {
+class ChatDivider extends ConsumerWidget {
   const ChatDivider({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = ref.watch(themeProvider).preset;
+
     // 20 (padding) + 56 (avatar) + 14 (gap) = 90
-    return const Divider(
-        height: 1, thickness: 1, indent: 90, color: ChatUi.line);
+    return Divider(height: 1, thickness: 1, indent: 90, color: p.divider);
   }
 }
 
 // ---------- Empty / Error ----------
-class ChatEmptyState extends StatelessWidget {
+class ChatEmptyState extends ConsumerWidget {
   final IconData icon;
   final String title;
   final String subtitle;
@@ -325,7 +343,9 @@ class ChatEmptyState extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = ref.watch(themeProvider).preset;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 40),
@@ -336,16 +356,16 @@ class ChatEmptyState extends StatelessWidget {
               width: 88,
               height: 88,
               decoration: BoxDecoration(
-                color: ChatUi.accent.withOpacity(0.10),
+                color: p.accent.withOpacity(0.10),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, size: 40, color: ChatUi.accentDark),
+              child: Icon(icon, size: 40, color: p.primary),
             ),
             const SizedBox(height: 18),
             Text(
               title,
-              style: const TextStyle(
-                color: ChatUi.ink,
+              style: TextStyle(
+                color: p.textMain,
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
               ),
@@ -354,8 +374,8 @@ class ChatEmptyState extends StatelessWidget {
             Text(
               subtitle,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: ChatUi.muted,
+              style: TextStyle(
+                color: p.textGrey,
                 fontSize: 14,
                 height: 1.4,
               ),
@@ -367,12 +387,14 @@ class ChatEmptyState extends StatelessWidget {
   }
 }
 
-class ChatErrorState extends StatelessWidget {
+class ChatErrorState extends ConsumerWidget {
   final Object error;
   const ChatErrorState({super.key, required this.error});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = ref.watch(themeProvider).preset;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 40),
@@ -382,10 +404,10 @@ class ChatErrorState extends StatelessWidget {
             Icon(Icons.error_outline_rounded,
                 size: 44, color: Colors.red.shade300),
             const SizedBox(height: 12),
-            const Text(
+            Text(
               'Something went wrong',
               style: TextStyle(
-                color: ChatUi.ink,
+                color: p.textMain,
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
               ),
@@ -396,7 +418,7 @@ class ChatErrorState extends StatelessWidget {
               textAlign: TextAlign.center,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: ChatUi.muted, fontSize: 13),
+              style: TextStyle(color: p.textGrey, fontSize: 13),
             ),
           ],
         ),

@@ -60,7 +60,6 @@ class AppThemePreset {
         onPrimary: onPrimary,
         surface: surface,
         onSurface: textMain,
-
       ),
       // Makes all default text follow the theme's text color.
       textTheme: base.textTheme.apply(
@@ -88,7 +87,7 @@ class AppThemePreset {
 
 // The 4 complete themes shown on the Theme page.
 final List<AppThemePreset> appPresets = [
-  // 1. Light: uses your existing AppColors so the current look stays the same
+  // 1. Light: your original look (uses your existing AppColors)
   AppThemePreset(
     name: 'Light',
     brightness: Brightness.light,
@@ -100,7 +99,7 @@ final List<AppThemePreset> appPresets = [
     textGrey: AppColors.textGrey,
     icon: AppColors.icon,
     divider: AppColors.divider,
-    myBubble: const Color(0xFFDCF8C6), // same light green bubble as before
+    myBubble: const Color(0xFFDCF8C6),
     myBubbleText: AppColors.textDark,
     otherBubble: Colors.white,
     otherBubbleText: AppColors.textDark,
@@ -109,67 +108,71 @@ final List<AppThemePreset> appPresets = [
     chatBackground: const Color(0xFFF0F2F5),
     inputField: const Color(0xFFF0F2F5),
   ),
-  // 2. Dark
+
+  // 2. Midnight (Dark): deep blue-grey with a fresh teal accent
   AppThemePreset(
-    name: 'Dark',
+    name: 'Midnight',
     brightness: Brightness.dark,
-    background: const Color(0xFF121212),
-    surface: const Color(0xFF1E1E1E),
-    primary: const Color(0xFF3CB67C),
+    background: const Color(0xFF111B21),
+    surface: const Color(0xFF1F2C34),
+    primary: const Color(0xFF00A884),
     onPrimary: Colors.white,
-    textMain: const Color(0xFFF3F4F6),
-    textGrey: const Color(0xFF9CA3AF),
-    icon: const Color(0xFF9CA3AF),
-    divider: const Color(0xFF2C2C2C),
-    myBubble: const Color(0xFF2E7D5B),
-    myBubbleText: Colors.white,
-    otherBubble: const Color(0xFF262626),
-    otherBubbleText: const Color(0xFFF3F4F6),
-    header: const Color(0xFF0B6B5D),
-    accent: const Color(0xFF25D366),
+    textMain: const Color(0xFFE9EDEF),
+    textGrey: const Color(0xFF8696A0),
+    icon: const Color(0xFF8696A0),
+    divider: const Color(0xFF2A3942),
+    myBubble: const Color(0xFF005C4B),
+    myBubbleText: const Color(0xFFE9EDEF),
+    otherBubble: const Color(0xFF202C33),
+    otherBubbleText: const Color(0xFFE9EDEF),
+    header: const Color(0xFF0E4A3F),
+    accent: const Color(0xFF00A884),
     chatBackground: const Color(0xFF0B141A),
-    inputField: const Color(0xFF2A2A2A),
+    inputField: const Color(0xFF2A3942),
   ),
-  // 3. Purple
+
+  // 3. Royal Purple: soft lavender screens, rich violet buttons
   AppThemePreset(
-    name: 'Purple',
+    name: 'Royal Purple',
     brightness: Brightness.light,
-    background: const Color(0xFFF5F3FF),
+    background: const Color(0xFFF6F3FF),
     surface: Colors.white,
-    primary: const Color(0xFF8B5CF6),
+    primary: const Color(0xFF7C3AED),
     onPrimary: Colors.white,
     textMain: const Color(0xFF1E1B4B),
-    textGrey: const Color(0xFF6B7280),
-    icon: const Color(0xFF7C6FA8),
-    divider: const Color(0xFFDDD6FE),
-    myBubble: const Color(0xFF8B5CF6),
+    textGrey: const Color(0xFF6B6490),
+    icon: const Color(0xFF8B82B8),
+    divider: const Color(0xFFE4DDFB),
+    myBubble: const Color(0xFF7C3AED),
     myBubbleText: Colors.white,
-    otherBubble: const Color(0xFFEDE9FE),
+    otherBubble: Colors.white,
     otherBubbleText: const Color(0xFF1E1B4B),
-    header: const Color(0xFF6D28D9),
+    header: const Color(0xFF5B21B6),
     accent: const Color(0xFF8B5CF6),
-    chatBackground: const Color(0xFFF5F3FF),
-    inputField: const Color(0xFFF5F3FF),
+    chatBackground: const Color(0xFFEFE9FF),
+    inputField: const Color(0xFFF1ECFF),
   ),
-  // 4. Green
+
+  // 4. Forest Green: fresh mint screens, deep emerald buttons
   AppThemePreset(
-    name: 'Green',
+    name: 'Forest Green',
     brightness: Brightness.light,
-    background: const Color(0xFFF0FDF4),
+    background: const Color(0xFFF1F8F4),
     surface: Colors.white,
-    primary: const Color(0xFF16A34A),
+    primary: const Color(0xFF047857),
     onPrimary: Colors.white,
-    textMain: const Color(0xFF052E16),
-    textGrey: const Color(0xFF4B5563),
-    icon: const Color(0xFF4D7C5F),
-    divider: const Color(0xFFBBF7D0),
-    myBubble: const Color(0xFF16A34A),
+    textMain: const Color(0xFF0F2A20),
+    textGrey: const Color(0xFF4B6358),
+    icon: const Color(0xFF6B8A7A),
+    divider: const Color(0xFFD3E8DD),
+    myBubble: const Color(0xFF047857),
     myBubbleText: Colors.white,
-    otherBubble: const Color(0xFFDCFCE7),
-    otherBubbleText: const Color(0xFF052E16),
-    header: const Color(0xFF166534),
-    accent: const Color(0xFF22C55E),
-    chatBackground: const Color(0xFFF0FDF4),
-    inputField: const Color(0xFFF0FDF4),
+    otherBubble: Colors.white,
+    otherBubbleText: const Color(0xFF0F2A20),
+
+    header: const Color(0xFF065F46),
+    accent: const Color(0xFF10B981),
+    chatBackground: const Color(0xFFE3F1E9),
+    inputField: const Color(0xFFE8F3ED),
   ),
 ];

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/shared/widgets/custom_button.dart';
 import '../../../../core/shared/widgets/custom_text_field.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_provider.dart';
 import '../../../../core/utils/validators.dart';
 import '../../widget/auth_header.dart';
 import '../provider.dart';
@@ -66,8 +67,10 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final p = ref.watch(themeProvider).preset;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: p.background,
       body: Center(
         child: SafeArea(
           child: SingleChildScrollView(

@@ -59,7 +59,8 @@ class _HomeViewState extends ConsumerState<HomeView> {
       final success = await Navigator.push<bool>(
         context,
         MaterialPageRoute(
-          builder: (_) => const EnterPinScreen(
+          builder: (_) => EnterPinScreen(
+            chatId: chat.id,
             title: 'Locked Chat',
             subtitle: 'Enter your PIN to open this chat.',
           ),
@@ -226,9 +227,10 @@ class _HomeViewState extends ConsumerState<HomeView> {
       final success = await Navigator.push<bool>(
         context,
         MaterialPageRoute(
-          builder: (_) => const EnterPinScreen(
+          builder: (_) => EnterPinScreen(
+            chatId: chat.id,
             title: 'Unlock Chat',
-            subtitle: 'Enter your PIN to remove the lock on this chat.',
+            subtitle: 'Enter the PIN to remove the lock on this chat.',
           ),
         ),
       );
@@ -238,22 +240,19 @@ class _HomeViewState extends ConsumerState<HomeView> {
       return;
     }
 
-    final hasPin = await notifier.hasPinSet();
-    if (!hasPin) {
-      if (!context.mounted) return;
-      final created = await Navigator.push<bool>(
-        context,
-        MaterialPageRoute(builder: (_) => const SetPinScreen()),
-      );
-      if (created != true) return;
-    }
+    // Set a PIN for this chat. The lock is saved inside SetPinScreen.
+    final created = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => SetPinScreen(chatId: chat.id)),
+    );
+    if (created != true) return;
 
-    await notifier.lockChat(chat.id);
     if (context.mounted) {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Chat locked')));
     }
   }
+
   Future<void> _deleteChat(
       BuildContext context, WidgetRef ref, dynamic chat) async {
     final name = chat.otherUserName ?? 'this chat';

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/theme_provider.dart';
 
 // Top part of every auth screen: (optional) back button, title, subtitle.
-class AuthHeader extends StatelessWidget {
+class AuthHeader extends ConsumerWidget {
   const AuthHeader({
     super.key,
     required this.title,
@@ -16,7 +18,10 @@ class AuthHeader extends StatelessWidget {
   final bool showBackButton; // false = no back icon
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Colors of the currently selected theme
+    final p = ref.watch(themeProvider).preset;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -28,10 +33,10 @@ class AuthHeader extends StatelessWidget {
               child: Container(
                 height: 44,
                 width: 44,
-                decoration: const BoxDecoration(
-                  color: Colors.white,
+                decoration: BoxDecoration(
+                  color: p.surface,
                   shape: BoxShape.circle,
-                  boxShadow: [
+                  boxShadow: const [
                     BoxShadow(
                       color: AppColors.shadow,
                       blurRadius: 12,
@@ -39,10 +44,10 @@ class AuthHeader extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.chevron_left,
                   size: 28,
-                  color: AppColors.textDark,
+                  color: p.textMain,
                 ),
               ),
             ),
@@ -53,17 +58,17 @@ class AuthHeader extends StatelessWidget {
         Text(
           title,
           textAlign: TextAlign.center,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 32,
             fontWeight: FontWeight.w700,
-            color: AppColors.textDark,
+            color: p.textMain,
           ),
         ),
         const SizedBox(height: 10),
         Text(
           subtitle,
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 15, height: 1.5, color: AppColors.textGrey),
+          style: TextStyle(fontSize: 15, height: 1.5, color: p.textGrey),
         ),
         const SizedBox(height: 25),
       ],

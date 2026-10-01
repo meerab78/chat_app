@@ -569,9 +569,10 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       final success = await Navigator.push<bool>(
         context,
         MaterialPageRoute(
-          builder: (_) => const EnterPinScreen(
+          builder: (_) => EnterPinScreen(
+            chatId: widget.chatId,
             title: 'Unlock Chat',
-            subtitle: 'Enter your PIN to remove the lock on this chat.',
+            subtitle: 'Enter the PIN to remove the lock on this chat.',
           ),
         ),
       );
@@ -585,19 +586,13 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       return;
     }
 
-    final hasPin = await notifier.hasPinSet();
-    if (!hasPin) {
-      if (!mounted) return;
-      final created = await Navigator.push<bool>(
-        context,
-        MaterialPageRoute(builder: (_) => const SetPinScreen()),
-      );
-      if (created != true) return;
-    }
+    final created = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => SetPinScreen(chatId: widget.chatId)),
+    );
+    if (created != true) return;
 
-    await notifier.lockChat(widget.chatId);
-    // Also mark it as unlocked-now, so it doesn't immediately ask for the
-    // PIN again on this same screen (since I'm already inside the chat)
+    // Already inside the chat, so don't ask for the PIN again right away
     notifier.markUnlocked(widget.chatId);
 
     if (mounted) {
@@ -610,10 +605,17 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
     if (pickedFile == null) return;
 
-    await ref.read(chatWallpaperProvider.notifier).setWallpaper(
-      widget.chatId,
-      File(pickedFile.path),
-    );
+    try {
+      await ref.read(chatWallpaperActionsProvider).setWallpaper(
+        widget.chatId,
+        File(pickedFile.path),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Failed to set wallpaper: $e')));
+      }
+    }
   }
 
   Future<void> _editMessage(dynamic msg) async {
@@ -656,7 +658,8 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
         ? ref.watch(groupMembersProvider(widget.chatId))
         : null;
     final isLocked = ref.watch(chatLockProvider).lockedChatIds.contains(widget.chatId);
-    final wallpaperPath = ref.watch(chatWallpaperProvider)[widget.chatId];
+    final wallpaperAsync = ref.watch(chatWallpaperStreamProvider(widget.chatId));
+    final wallpaperPath = wallpaperAsync.whenOrNull(data: (url) => url); // now a URL, not a local path
     return Scaffold(
       backgroundColor: p.chatBackground,
       appBar: _isSelectionMode ? _buildSelectionAppBar() :  AppBar(
@@ -715,7 +718,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
               } else if (value == 'change_wallpaper') {
                 _pickChatWallpaper();
               } else if (value == 'remove_wallpaper') {
-                ref.read(chatWallpaperProvider.notifier).removeWallpaper(widget.chatId);
+                ref.read(chatWallpaperActionsProvider).removeWallpaper(widget.chatId);
               }
             },
             itemBuilder: (context) => [
@@ -775,12 +778,12 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       body: Stack(
         children:[
           if (wallpaperPath != null)
-        Positioned.fill(
-    child: Image.file(
-    File(wallpaperPath),
-    fit: BoxFit.cover,
-    ),
-    ),
+            Positioned.fill(
+              child: Image.network(
+                wallpaperPath,
+                fit: BoxFit.cover,
+              ),
+            ),
     if (wallpaperPath != null)
     Positioned.fill(
     // Soft white wash so text bubbles stay readable over any photo

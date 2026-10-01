@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../theme/app_colors.dart';
+import '../../theme/theme_provider.dart';
 
 // One text field used on every screen.
 //  - icon on the left
 //  - obscureText: true  -> it is a password field, so an eye icon is shown
 //  - error message comes in red below the field
-class CustomTextField extends StatefulWidget {
+class CustomTextField extends ConsumerStatefulWidget {
   const CustomTextField({
     super.key,
     required this.controller,
@@ -32,14 +34,17 @@ class CustomTextField extends StatefulWidget {
   final ValueChanged<String>? onSubmitted;
 
   @override
-  State<CustomTextField> createState() => _CustomTextFieldState();
+  ConsumerState<CustomTextField> createState() => _CustomTextFieldState();
 }
 
-class _CustomTextFieldState extends State<CustomTextField> {
+class _CustomTextFieldState extends ConsumerState<CustomTextField> {
   bool _hidePassword = true; // true = dots are shown, false = text is shown
 
   @override
   Widget build(BuildContext context) {
+    // Colors of the currently selected theme
+    final p = ref.watch(themeProvider).preset;
+
     // FormField lets this widget work with Form.validate() on the screen.
     return FormField<String>(
       initialValue: widget.controller.text,
@@ -51,10 +56,10 @@ class _CustomTextFieldState extends State<CustomTextField> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // White pill with a soft shadow (like the design)
+            // Rounded pill with a soft shadow (like the design)
             Container(
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: p.surface,
                 borderRadius: BorderRadius.circular(30),
                 border: Border.all(
                   color: hasError ? AppColors.error : Colors.transparent,
@@ -75,25 +80,25 @@ class _CustomTextFieldState extends State<CustomTextField> {
                 inputFormatters: widget.inputFormatters,
                 onSubmitted: widget.onSubmitted,
                 onChanged: (value) => state.didChange(value), // re-check while typing
-                style: const TextStyle(fontSize: 15, color: AppColors.textDark),
+                style: TextStyle(fontSize: 15, color: p.textMain),
                 decoration: InputDecoration(
                   hintText: widget.hintText,
-                  hintStyle: const TextStyle(fontSize: 15, color: AppColors.icon),
+                  hintStyle: TextStyle(fontSize: 15, color: p.icon),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(vertical: 20),
-                  prefixIcon: Icon(widget.prefixIcon, color: AppColors.icon, size: 22),
+                  prefixIcon: Icon(widget.prefixIcon, color: p.icon, size: 22),
                   suffixIcon: widget.obscureText
                       ? IconButton(
-                          onPressed: () =>
-                              setState(() => _hidePassword = !_hidePassword),
-                          icon: Icon(
-                            _hidePassword
-                                ? Icons.visibility_off
-                                : Icons.visibility,
-                            color: AppColors.icon,
-                            size: 22,
-                          ),
-                        )
+                    onPressed: () =>
+                        setState(() => _hidePassword = !_hidePassword),
+                    icon: Icon(
+                      _hidePassword
+                          ? Icons.visibility_off
+                          : Icons.visibility,
+                      color: p.icon,
+                      size: 22,
+                    ),
+                  )
                       : null,
                 ),
               ),

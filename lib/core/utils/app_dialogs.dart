@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_theme_presets.dart';
+import '../theme/theme_provider.dart';
 import 'app_haptics.dart';
 
 // What the user picked in the message options dialog
@@ -9,6 +12,12 @@ enum MessageAction { edit, delete }
 //   final yes = await AppDialogs.confirmExit(context);
 class AppDialogs {
   AppDialogs._();
+
+  // Reads the selected theme colors (dialogs have no "ref", so we
+  // get the Riverpod container from the context instead).
+  static AppThemePreset _preset(BuildContext context) {
+    return ProviderScope.containerOf(context).read(themeProvider).preset;
+  }
 
   // ---------- BASE DIALOG (every yes/no dialog uses this) ----------
 
@@ -23,30 +32,31 @@ class AppDialogs {
         bool isDestructive = false, // true = confirm button becomes red
       }) async {
     AppHaptics.light();
+    final p = _preset(context);
 
     final result = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: p.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: AppColors.textDark,
+            color: p.textMain,
           ),
         ),
         content: Text(
           message,
-          style: const TextStyle(fontSize: 14, color: AppColors.textGrey),
+          style: TextStyle(fontSize: 14, color: p.textGrey),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
             child: Text(
               cancelText,
-              style: const TextStyle(color: AppColors.textGrey),
+              style: TextStyle(color: p.textGrey),
             ),
           ),
           TextButton(
@@ -54,7 +64,7 @@ class AppDialogs {
             child: Text(
               confirmText,
               style: TextStyle(
-                color: isDestructive ? AppColors.error : AppColors.primary,
+                color: isDestructive ? AppColors.error : p.primary,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -120,24 +130,26 @@ class AppDialogs {
       BuildContext context, {
         bool canEdit = true,
       }) {
+    final p = _preset(context);
+
     return showDialog<MessageAction>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: p.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
+        title: Text(
           'Message options',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: AppColors.textDark,
+            color: p.textMain,
           ),
         ),
         actions: [
           if (canEdit)
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, MessageAction.edit),
-              child: const Text('Edit', style: TextStyle(color: AppColors.primary)),
+              child: Text('Edit', style: TextStyle(color: p.primary)),
             ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, MessageAction.delete),
@@ -145,7 +157,7 @@ class AppDialogs {
           ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.textGrey)),
+            child: Text('Cancel', style: TextStyle(color: p.textGrey)),
           ),
         ],
       ),
@@ -206,33 +218,36 @@ class _EditTextDialogState extends State<_EditTextDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final p = AppDialogs._preset(context);
+
     return AlertDialog(
-      backgroundColor: Colors.white,
+      backgroundColor: p.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Text(
         widget.title,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.bold,
-          color: AppColors.textDark,
+          color: p.textMain,
         ),
       ),
       content: TextField(
         controller: _controller,
         autofocus: true,
         maxLines: null,
+        style: TextStyle(color: p.textMain),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context), // returns null
-          child: const Text('Cancel', style: TextStyle(color: AppColors.textGrey)),
+          child: Text('Cancel', style: TextStyle(color: p.textGrey)),
         ),
         TextButton(
           onPressed: () => Navigator.pop(context, _controller.text.trim()),
           child: Text(
             widget.saveText,
-            style: const TextStyle(
-              color: AppColors.primary,
+            style: TextStyle(
+              color: p.primary,
               fontWeight: FontWeight.bold,
             ),
           ),

@@ -5,14 +5,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/shared/widgets/custom_button.dart';
 import '../../../core/shared/widgets/custom_text_field.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/theme_provider.dart';
 import '../../auth/widget/auth_header.dart';
 import '../provider.dart';
 
-
-// Shown the first time the user locks any chat.
-// Pops with `true` once a PIN has been saved.
+// Sets a PIN for ONE chat. Pops with `true` once the chat is locked.
 class SetPinScreen extends ConsumerStatefulWidget {
-  const SetPinScreen({super.key});
+  final String chatId;
+
+  const SetPinScreen({super.key, required this.chatId});
 
   @override
   ConsumerState<SetPinScreen> createState() => _SetPinScreenState();
@@ -49,7 +50,16 @@ class _SetPinScreenState extends ConsumerState<SetPinScreen> {
       _isSaving = true;
     });
 
-    await ref.read(chatLockProvider.notifier).setPin(pin);
+    try {
+      await ref.read(chatLockProvider.notifier).lockChat(widget.chatId, pin);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isSaving = false;
+        _error = 'Could not save PIN, check your internet';
+      });
+      return;
+    }
 
     if (!mounted) return;
     Navigator.pop(context, true);
@@ -62,8 +72,10 @@ class _SetPinScreenState extends ConsumerState<SetPinScreen> {
       LengthLimitingTextInputFormatter(4),
     ];
 
+    final p = ref.watch(themeProvider).preset;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: p.background,
       body: Center(
         child: SafeArea(
           child: SingleChildScrollView(
@@ -73,9 +85,7 @@ class _SetPinScreenState extends ConsumerState<SetPinScreen> {
                 const AuthHeader(
                   title: 'Set a PIN',
                   showBackButton: true,
-                  subtitle:
-                  'Choose a 4-digit PIN to lock and unlock your chats. '
-                      'This PIN is stored only on this device.',
+                  subtitle: 'Choose a 4-digit PIN for this chat.',
                 ),
                 CustomTextField(
                   controller: _pinController,
