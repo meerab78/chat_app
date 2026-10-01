@@ -3,12 +3,14 @@ class ProfileModel {
   final String name;
   final String email;
   final String? phone;
+  final String? avatarUrl; // NEW: profile photo
 
   ProfileModel({
     required this.id,
     required this.name,
     required this.email,
     this.phone,
+    this.avatarUrl,
   });
 
   factory ProfileModel.fromJson(Map<String, dynamic> json) {
@@ -17,6 +19,7 @@ class ProfileModel {
       name: json['name'] as String? ?? '',
       email: json['email'] as String? ?? '',
       phone: json['phone'] as String?,
+      avatarUrl: json['avatar_url'] as String?, // NEW
     );
   }
 }

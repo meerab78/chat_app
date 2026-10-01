@@ -3,7 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/messages_model.dart';
 
 // autoDispose: forget everything when the chat screen closes,
-// so the next time it opens it reads the latest cleared_at
+// so the next time it opens it reads the latest cleared_at / left_at
 final messagesProvider = StreamProvider.autoDispose
     .family<List<MessageModel>, String>((ref, chatId) async* {
   final supabase = Supabase.instance.client;
@@ -11,7 +11,7 @@ final messagesProvider = StreamProvider.autoDispose
 
   final membership = await supabase
       .from('chat_members')
-      .select('cleared_at')
+      .select('cleared_at, left_at')
       .eq('chat_id', chatId)
       .eq('user_id', currentUserId)
       .maybeSingle();
@@ -19,6 +19,17 @@ final messagesProvider = StreamProvider.autoDispose
   final clearedAt = membership != null && membership['cleared_at'] != null
       ? DateTime.parse(membership['cleared_at'] as String)
       : null;
+
+  // Set when I left this group
+  final leftAt = membership != null && membership['left_at'] != null
+      ? DateTime.parse(membership['left_at'] as String)
+      : null;
+
+  // NEW: if I left this group, I should not see any of its messages
+  if (leftAt != null) {
+    yield <MessageModel>[];
+    return;
+  }
 
   final stream = supabase
       .from('messages')
@@ -37,6 +48,7 @@ final messagesProvider = StreamProvider.autoDispose
       }
     }
 
+    // CHANGED: the old leftAt check is gone (not needed anymore)
     if (clearedAt == null) return uniqueMessages;
     return uniqueMessages.where((m) => m.createdAt.isAfter(clearedAt)).toList();
   });

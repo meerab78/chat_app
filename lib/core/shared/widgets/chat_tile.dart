@@ -163,6 +163,7 @@ class ChatTile extends ConsumerWidget {
   final String? time;
   final int unreadCount;
   final bool isGroup;
+  final String? avatarUrl;
   final Color avatarColor;
   final int index; // sirf halki entry animation ke liye
   final VoidCallback onTap;
@@ -179,12 +180,14 @@ class ChatTile extends ConsumerWidget {
     required this.onTap,
     this.index = 0,
     this.onLongPress,
+    this.avatarUrl,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final p = ref.watch(themeProvider).preset;
     final bool hasUnread = unreadCount > 0;
+    final bool hasAvatar = avatarUrl != null && avatarUrl!.isNotEmpty;
     final String badge = unreadCount > 99 ? '99+' : '$unreadCount';
     final int ms = 220 + (index < 10 ? index : 10) * 40;
 
@@ -219,9 +222,18 @@ class ChatTile extends ConsumerWidget {
                   decoration: BoxDecoration(
                     color: avatarColor.withOpacity(0.14),
                     shape: BoxShape.circle,
+                    // Show the photo when there is one
+                    image: hasAvatar
+                        ? DecorationImage(
+                      image: NetworkImage(avatarUrl!),
+                      fit: BoxFit.cover,
+                    )
+                        : null,
                   ),
                   alignment: Alignment.center,
-                  child: isGroup
+                  child: hasAvatar
+                      ? null
+                      : isGroup
                       ? Icon(Icons.groups_rounded, color: avatarColor, size: 24)
                       : Text(
                     name.isNotEmpty ? name[0].toUpperCase() : '?',

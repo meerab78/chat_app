@@ -8,6 +8,8 @@ class ChatModel {
   final String? lastMessage;
   final DateTime? lastMessageAt;
   final int unreadCount; // how many unread messages in this chat
+  final String? avatarUrl;  // group photo, or the other user's photo
+  final String? createdBy;  // group admin's user id
 
   ChatModel({
     required this.id,
@@ -17,6 +19,8 @@ class ChatModel {
     this.lastMessage,
     this.lastMessageAt,
     this.unreadCount = 0,
+    this.avatarUrl,
+    this.createdBy,
   });
 
   factory ChatModel.fromJson(Map<String, dynamic> json) {

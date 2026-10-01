@@ -19,18 +19,21 @@ import '../../chat lock/screens/set_pin_view.dart';
 import '../../voice/provider/voice_recorder_provider.dart';
 import '../../voice/services/voice_recorder.dart';
 import '../../voice/widget/voice_record_widgets.dart';
+import '../Groups/group_info_view.dart';
+import '../Groups/providers.dart';
 import '../providers/chat_actions_provider.dart';
+import '../providers/chat_list_provider.dart';
 import '../providers/chat_wallpaper_provider.dart';
 import '../providers/message_provider.dart';
 import '../providers/group_members_provider.dart';
 import '../widgets/message_bubble.dart';
 import 'forward_screen.dart';
 import 'image_preview_view.dart';
+
 class ConversationScreen extends ConsumerStatefulWidget {
   final String chatId;
   final String otherUserName;
   final bool isGroup;
-
 
   const ConversationScreen({
     super.key,
@@ -53,7 +56,6 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   static const int _maxRecordSeconds = 300; //5min
   static const int _maxFileBytes = 5 * 1024 * 1024; // 5 MB
   String get _currentUserId => Supabase.instance.client.auth.currentUser!.id;
-
 
   @override
   void initState() {
@@ -88,6 +90,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       ref.invalidate(messagesProvider(widget.chatId));
     }
   }
+
   void _toggleMessageSelection(String messageId) {
     setState(() {
       if (_selectedMessageIds.contains(messageId)) {
@@ -106,6 +109,16 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
 
   void _exitSelectionMode() {
     setState(() => _selectedMessageIds.clear());
+  }
+
+  // Opens the Group Info screen (only used for group chats)
+  void _openGroupInfo() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => GroupInfoScreen(chatId: widget.chatId),
+      ),
+    );
   }
 
   Future<void> _forwardSelectedMessages() async {
@@ -174,6 +187,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       },
     );
   }
+
   // Called when user presses and holds the mic button
   Future<void> _startVoiceRecording() async {
     final started = await ref.read(voiceRecorderProvider.notifier).start();
@@ -215,6 +229,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     final seconds = (totalSeconds % 60).toString().padLeft(2, '0');
     return '$minutes:$seconds';
   }
+
   Future<void> _pickAndSendImage(ImageSource source) async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(
@@ -256,10 +271,12 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       caption: caption,
     );
   }
+
   void _toggleAttachPanel() {
     FocusScope.of(context).unfocus(); // hide keyboard first, like WhatsApp
     setState(() => _showAttachPanel = !_showAttachPanel);
   }
+
   Future<void> _pickAndSendFile() async {
     final PlatformFile? pickedFile = await FilePicker.pickFile();
     if (pickedFile == null || pickedFile.path == null) return;
@@ -284,6 +301,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       fileName: fileName,
     );
   }
+
   // First step: "Share current location" or "Share live location"
   void _showLocationOptionsSheet() {
     final p = ref.read(themeProvider).preset;
@@ -332,7 +350,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     );
   }
 
-// Second step (only for live location): pick a duration, then press Send
+  // Second step (only for live location): pick a duration, then press Send
   void _showLiveLocationDurationSheet() {
     int? selectedMinutes; // holds the user's pick until they press Send
     final p = ref.read(themeProvider).preset;
@@ -411,7 +429,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     );
   }
 
-// liveMinutes == null means a one-time (non-live) location
+  // liveMinutes == null means a one-time (non-live) location
   Future<void> _sendCurrentLocation(int? liveMinutes) async {
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
@@ -437,13 +455,13 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     );
   }
 
-// Called when the sender taps "Stop sharing" on their own live location
+  // Called when the sender taps "Stop sharing" on their own live location
   Future<void> _stopLiveLocation(String messageId) async {
     await ref.read(chatActionsProvider).stopLiveLocation(messageId);
     ref.invalidate(messagesProvider(widget.chatId));
   }
 
-// Ek option ka button (gol icon + neeche naam)
+  // Ek option ka button (gol icon + neeche naam)
   Widget _attachOption({
     required IconData icon,
     required String label,
@@ -471,6 +489,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       const SnackBar(content: Text('Coming soon')),
     );
   }
+
   // The actual panel content (grid of options)
   Widget _buildAttachPanel() {
     final p = ref.read(themeProvider).preset;
@@ -526,6 +545,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       ),
     );
   }
+
   Future<void> _sendMessage() async {
     if (_isSending) return; // block double-tap
 
@@ -545,6 +565,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       if (mounted) setState(() => _isSending = false);
     }
   }
+
   // Long press on my message: ask what to do
   Future<void> _showMessageOptions(dynamic msg) async {
     AppHaptics.medium();
@@ -600,6 +621,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
           .showSnackBar(const SnackBar(content: Text('Chat locked')));
     }
   }
+
   Future<void> _pickChatWallpaper() async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
@@ -643,6 +665,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     await ref.read(chatActionsProvider).deleteMessage(msg.id);
     ref.invalidate(messagesProvider(widget.chatId));
   }
+
   @override
   Widget build(BuildContext context) {
     final messagesAsync = ref.watch(messagesProvider(widget.chatId));
@@ -658,54 +681,75 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
         ? ref.watch(groupMembersProvider(widget.chatId))
         : null;
     final isLocked = ref.watch(chatLockProvider).lockedChatIds.contains(widget.chatId);
+    final hasLeft = widget.isGroup &&
+        (ref.watch(hasLeftGroupProvider(widget.chatId)).value ?? false);
     final wallpaperAsync = ref.watch(chatWallpaperStreamProvider(widget.chatId));
     final wallpaperPath = wallpaperAsync.whenOrNull(data: (url) => url); // now a URL, not a local path
+    // Live name + photo for the header (falls back to the values passed in)
+    final chatList = ref.watch(chatListProvider).value ?? [];
+    final matches = chatList.where((c) => c.id == widget.chatId).toList();
+    final liveChat = matches.isNotEmpty ? matches.first : null;
+    final headerName = liveChat?.otherUserName ?? widget.otherUserName;
+    final headerAvatarUrl = liveChat?.avatarUrl;
+    final hasHeaderAvatar = headerAvatarUrl != null && headerAvatarUrl.isNotEmpty;
+
     return Scaffold(
       backgroundColor: p.chatBackground,
-      appBar: _isSelectionMode ? _buildSelectionAppBar() :  AppBar(
+      appBar: _isSelectionMode
+          ? _buildSelectionAppBar()
+          : AppBar(
         backgroundColor: p.header,
         foregroundColor: Colors.white,
         elevation: 1,
         titleSpacing: 0,
-        title: Row(
-          children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: widget.isGroup
-                  ? Colors.teal.shade100
-                  : avatarColorFor(widget.otherUserName),
-              child: widget.isGroup
-                  ? const Icon(Icons.group, color: Colors.teal, size: 18)
-                  : Text(
-                widget.otherUserName.isNotEmpty
-                    ? widget.otherUserName[0].toUpperCase()
-                    : '?',
-                style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+        title: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          // Only group chats have an info screen
+          onTap: widget.isGroup ? _openGroupInfo : null,
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: widget.isGroup
+                    ? Colors.teal.shade100
+                    : avatarColorFor(headerName),
+                backgroundImage:
+                hasHeaderAvatar ? NetworkImage(headerAvatarUrl!) : null,
+                child: hasHeaderAvatar
+                    ? null
+                    : widget.isGroup
+                    ? const Icon(Icons.group, color: Colors.teal, size: 18)
+                    : Text(
+                  headerName.isNotEmpty ? headerName[0].toUpperCase() : '?',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold),
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    widget.otherUserName,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                  // NEW: show member names under the group name, WhatsApp-style
-                  if (widget.isGroup && groupMembersAsync != null && groupMembersAsync.hasValue)
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                     Text(
-                      groupMembersAsync.value!.values.join(', '),
+                      headerName,
                       overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                      style: const TextStyle(fontSize: 12, color: Colors.white70),
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                     ),
-                ],
+                    if (widget.isGroup && groupMembersAsync != null && groupMembersAsync.hasValue)
+                      Text(
+                        groupMembersAsync.value!.values.join(', '),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        style: const TextStyle(fontSize: 12, color: Colors.white70),
+                      ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
         actions: [
           PopupMenuButton<String>(
@@ -773,10 +817,10 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                 ),
             ],
           ),
-            ],
-          ),
+        ],
+      ),
       body: Stack(
-        children:[
+        children: [
           if (wallpaperPath != null)
             Positioned.fill(
               child: Image.network(
@@ -784,119 +828,140 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                 fit: BoxFit.cover,
               ),
             ),
-    if (wallpaperPath != null)
-    Positioned.fill(
-    // Soft white wash so text bubbles stay readable over any photo
-    child: Container(color: Colors.white.withOpacity(0.45)),
-    ),
-        Column(
-          children: [
-            Expanded(
-              child: messagesAsync.when(
-                data: (messages) {
-                  if (messages.isEmpty) {
-                    return const Center(
-                      child: Text('Say hi 👋', style: TextStyle(color: Colors.grey)),
-                    );
-                  }
-        
-                  List<dynamic> sortedMessages = List.from(messages);
-                  sortedMessages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-        
-                  Map<String, String> memberNames = {};
-                  if (groupMembersAsync != null && groupMembersAsync.hasValue) {
-                    memberNames = groupMembersAsync.value!;
-                  }
-        
-                  return ListView.builder(
-                    reverse: true,
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    itemCount: sortedMessages.length,
-                    itemBuilder: (context, index) {
-                      int realIndex = sortedMessages.length - 1 - index;
-                      final msg = sortedMessages[realIndex];
-                      final isMe = msg.senderId == _currentUserId;
-        
-                      String? senderName;
-                      if (widget.isGroup && !isMe) {
-                        senderName = memberNames[msg.senderId];
-                      }
-        
-                      // message bubble style is untouched, only the screen
-                      // around it has been polished
-                      return MessageBubble(
-                        key: ValueKey(msg.id),
-                        text: msg.content,
-                        time: msg.createdAt,
-                        isMe: isMe,
-                        status: msg.status,
-                        senderName: senderName,
-                        messageType: msg.messageType,
-                        mediaUrl: msg.mediaUrl,
-                        durationSeconds: msg.durationSeconds,
-                        onStopLiveLocation: isMe ? () => _stopLiveLocation(msg.id) : null,
-                        onLongPress: isMe ? () => _showMessageOptions(msg) : null,
-                        selectionMode: _isSelectionMode,
-                        isSelected: _selectedMessageIds.contains(msg.id),
-                        onToggleSelect: () => _toggleMessageSelection(msg.id),
-                      );
-                    },
-                  );
-                },
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (err, stack) => Center(child: Text('Error: $err')),
-              ),
+          if (wallpaperPath != null)
+            Positioned.fill(
+              // Soft white wash so text bubbles stay readable over any photo
+              child: Container(color: Colors.white.withOpacity(0.45)),
             ),
-            // ---- Input bar ----
-            SafeArea(
-              top: false,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Attach panel smoothly grows above the input bar
-                  AnimatedSize(
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOut,
-                    child: _showAttachPanel ? _buildAttachPanel() : const SizedBox(width: double.infinity),
-                  ),
-        
-                  // Input row + lock hint bubble
-                  Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Container(
-                        width: double.infinity,
-                        color: p.surface,
-                        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Expanded(
-                              child: recorder.isRecording
-                                  ? _buildRecordingBar(recorder)
-                                  : _buildTypingBar(),
-                            ),
-                            const SizedBox(width: 8),
-                            _buildRightButton(recorder),
-                          ],
+          Column(
+            children: [
+              Expanded(
+                child: messagesAsync.when(
+                  data: (messages) {
+                    // NEW: I left this group -> show a note instead of messages
+                    if (hasLeft) {
+                      return Center(
+                        child: Text(
+                          'You left this group',
+                          style: TextStyle(color: p.textGrey),
                         ),
+                      );
+                    }
+
+                    if (messages.isEmpty) {
+                      return const Center(
+                        child: Text('Say hi 👋', style: TextStyle(color: Colors.grey)),
+                      );
+                    }
+
+                    List<dynamic> sortedMessages = List.from(messages);
+                    sortedMessages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+
+                    Map<String, String> memberNames = {};
+                    if (groupMembersAsync != null && groupMembersAsync.hasValue) {
+                      memberNames = groupMembersAsync.value!;
+                    }
+
+                    return ListView.builder(
+                      reverse: true,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      itemCount: sortedMessages.length,
+                      itemBuilder: (context, index) {
+                        int realIndex = sortedMessages.length - 1 - index;
+                        final msg = sortedMessages[realIndex];
+
+                        // NEW: "<name> left the group" style notices
+                        if (msg.messageType == 'system') {
+                          return _buildSystemMessage(msg.content);
+                        }
+
+                        final isMe = msg.senderId == _currentUserId;
+
+                        String? senderName;
+                        if (widget.isGroup && !isMe) {
+                          senderName = memberNames[msg.senderId];
+                        }
+
+                        // message bubble style is untouched, only the screen
+                        // around it has been polished
+                        return MessageBubble(
+                          key: ValueKey(msg.id),
+                          text: msg.content,
+                          time: msg.createdAt,
+                          isMe: isMe,
+                          status: msg.status,
+                          senderName: senderName,
+                          messageType: msg.messageType,
+                          mediaUrl: msg.mediaUrl,
+                          durationSeconds: msg.durationSeconds,
+                          onStopLiveLocation: isMe ? () => _stopLiveLocation(msg.id) : null,
+                          onLongPress: isMe ? () => _showMessageOptions(msg) : null,
+                          selectionMode: _isSelectionMode,
+                          isSelected: _selectedMessageIds.contains(msg.id),
+                          onToggleSelect: () => _toggleMessageSelection(msg.id),
+                        );
+                      },
+                    );
+                  },
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (err, stack) => Center(child: Text('Error: $err')),
+                ),
+              ),
+              // ---- Input bar ----
+              if (hasLeft)
+                _buildLeftBanner()
+              else
+                SafeArea(
+                  top: false,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Attach panel smoothly grows above the input bar
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeOut,
+                        child: _showAttachPanel
+                            ? _buildAttachPanel()
+                            : const SizedBox(width: double.infinity),
                       ),
-        
-                      // Lock hint floats above the mic while holding
-                      if (recorder.isRecording && !recorder.isLocked)
-                        Positioned(right: 10, bottom: 66, child: _buildLockHint()),
+
+                      // Input row + lock hint bubble
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            width: double.infinity,
+                            color: p.surface,
+                            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Expanded(
+                                  child: recorder.isRecording
+                                      ? _buildRecordingBar(recorder)
+                                      : _buildTypingBar(),
+                                ),
+                                const SizedBox(width: 8),
+                                _buildRightButton(recorder),
+                              ],
+                            ),
+                          ),
+
+                          // Lock hint floats above the mic while holding
+                          if (recorder.isRecording && !recorder.isLocked)
+                            Positioned(right: 10, bottom: 66, child: _buildLockHint()),
+                        ],
+                      ),
                     ],
                   ),
-                ],
-              ),
-            ),
-          ],
-        ),
-    ],
+                ),
+            ],
+          ),
+        ],
       ),
-
     );
   }
+
   // Left side of the input bar while recording
   Widget _buildRecordingBar(VoiceRecorderState recorder) {
     final p = ref.read(themeProvider).preset;
@@ -1024,6 +1089,46 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       onLock: _lockVoiceRecording,
       onCancel: _cancelVoiceRecording,
       onSend: _stopVoiceRecording,
+    );
+  }
+
+  // Shown instead of the input bar after I left the group
+  Widget _buildLeftBanner() {
+    final p = ref.read(themeProvider).preset;
+    return SafeArea(
+      top: false,
+      child: Container(
+        width: double.infinity,
+        color: p.surface,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+        child: Text(
+          "You can't send messages to this group because you're no longer a member.",
+          textAlign: TextAlign.center,
+          style: TextStyle(color: p.textGrey, fontSize: 13.5),
+        ),
+      ),
+    );
+  }
+
+  // NEW: centered grey notice, like "Ali left the group"
+  Widget _buildSystemMessage(String text) {
+    final p = ref.read(themeProvider).preset;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 24),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: p.surface,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            text,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: p.textGrey, fontSize: 12.5),
+          ),
+        ),
+      ),
     );
   }
 

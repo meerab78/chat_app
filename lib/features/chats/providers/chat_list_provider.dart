@@ -13,7 +13,7 @@ final chatListProvider = FutureProvider<List<ChatModel>>((ref) async {
   // NEW: also select cleared_at, so we know if I "deleted" this chat before
   final myMemberships = await supabase
       .from('chat_members')
-      .select('chat_id, cleared_at, chats!inner(id, is_group, name, created_at)')
+      .select('chat_id, cleared_at, left_at, chats!inner(id, is_group, name, created_at, avatar_url, created_by)')
       .eq('user_id', currentUserId);
 
   //  process every chat's extra lookups in PARALLEL.
@@ -26,21 +26,27 @@ final chatListProvider = FutureProvider<List<ChatModel>>((ref) async {
     final clearedAt = row['cleared_at'] != null
         ? DateTime.parse(row['cleared_at'] as String)
         : null;
+    final leftAt = row['left_at'] != null
+        ? DateTime.parse(row['left_at'] as String)
+        : null;
 
     String displayName;
+    String? avatarUrl;
 
     if (isGroup) {
       displayName = chatData['name'] as String? ?? 'Group';
+      avatarUrl = chatData['avatar_url'] as String?;
     } else {
       final otherMember = await supabase
           .from('chat_members')
-          .select('profiles!inner(name)')
+          .select('profiles!inner(name, avatar_url)') // CHANGED: avatar_url added
           .eq('chat_id', chatId)
           .neq('user_id', currentUserId)
           .maybeSingle();
 
       if (otherMember != null) {
         displayName = otherMember['profiles']['name'] as String;
+        avatarUrl = otherMember['profiles']['avatar_url'] as String?;
       } else {
         displayName = 'Unknown';
       }
@@ -54,6 +60,11 @@ final chatListProvider = FutureProvider<List<ChatModel>>((ref) async {
 
     if (clearedAt != null) {
       lastMsgQuery = lastMsgQuery.gt('created_at', clearedAt.toIso8601String());
+    }
+
+    // After I left, ignore anything sent later
+    if (leftAt != null) {
+      lastMsgQuery = lastMsgQuery.lte('created_at', leftAt.toIso8601String());
     }
 
     final lastMsg = await lastMsgQuery
@@ -88,6 +99,7 @@ final chatListProvider = FutureProvider<List<ChatModel>>((ref) async {
 
     final unreadRows = await unreadQuery;
     int unreadCount = (unreadRows as List).length;
+    if (leftAt != null) unreadCount = 0;
 
     return ChatModel(
       id: chatId,
@@ -97,6 +109,8 @@ final chatListProvider = FutureProvider<List<ChatModel>>((ref) async {
       lastMessage: lastMessage,
       lastMessageAt: lastMessageAt,
       unreadCount: unreadCount,
+      avatarUrl: avatarUrl,
+      createdBy: chatData['created_by'] as String?,
     );
   });
 

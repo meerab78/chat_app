@@ -5,6 +5,7 @@ import '../../core/shared/widgets/chat_tile.dart';
 import '../../core/theme/theme_provider.dart';
 import '../../core/utils/app_dialogs.dart';
 import '../../core/utils/time_formatter.dart';
+import '../Shortcut/service.dart';
 import '../chat lock/provider.dart';
 import '../chat lock/screens/enter_pin_view.dart';
 import '../chat lock/screens/set_pin_view.dart';
@@ -126,7 +127,20 @@ class _HomeViewState extends ConsumerState<HomeView> {
                   ),
                 ),
                 const SizedBox(height: 12),
+                const SizedBox(height: 8),
 
+// Add to home screen option
+                _sheetActionTile(
+                  icon: Icons.add_to_home_screen_rounded,
+                  iconBg: kAccentColor.withOpacity(0.12),
+                  iconColor: kAccentColor,
+                  title: 'Add to home screen',
+                  subtitle: 'Open this chat directly from your home screen',
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _addToHomeScreen(context, chat, name);
+                  },
+                ),
                 // Lock / Unlock option
                 _sheetActionTile(
                   icon: isLocked ? Icons.lock_open_rounded : Icons.lock_outline_rounded,
@@ -213,6 +227,22 @@ class _HomeViewState extends ConsumerState<HomeView> {
         ),
       ),
     );
+  }
+
+  // Creates a home screen shortcut for this chat
+  Future<void> _addToHomeScreen(
+      BuildContext context, dynamic chat, String name) async {
+    final ok = await ref.read(chatShortcutServiceProvider).pinChat(
+      chatId: chat.id,
+      name: name,
+      isGroup: chat.isGroup,
+    );
+
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Shortcuts are not supported on this device')),
+      );
+    }
   }
 
   Future<void> _handleLockToggle(
@@ -360,6 +390,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
                       isGroup: chat.isGroup,
                       avatarColor:
                       chat.isGroup ? Colors.teal : avatarColorFor(name),
+                      avatarUrl: chat.avatarUrl,
                       onTap: () => _handleChatTap(context, ref, chat, name, isLocked),
                       onLongPress: () => _showChatOptionsSheet(context, ref, chat, isLocked),
                     ),

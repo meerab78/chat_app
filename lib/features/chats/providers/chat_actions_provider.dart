@@ -120,14 +120,64 @@ class ChatActions {
     await supabase.from('chats').update({'avatar_url': publicUrl}).eq('id', chatId);
   }
 
-  // Removes me from a group's member list
+  // Posts "<name> left the group" for the others, then marks me as left
   Future<void> leaveGroup(String chatId) async {
     final currentUserId = supabase.auth.currentUser!.id;
+
+    final me = await supabase
+        .from('profiles')
+        .select('name')
+        .eq('id', currentUserId)
+        .maybeSingle();
+    final myName = (me?['name'] as String?)?.trim();
+    final shownName = (myName == null || myName.isEmpty) ? 'Someone' : myName;
+
+    // 1) System message first (I'm still a member, so this insert is allowed)
+    await supabase.from('messages').insert({
+      'chat_id': chatId,
+      'sender_id': currentUserId,
+      'content': '$shownName left the group',
+      'message_type': 'system',
+    });
+
+    // 2) Then mark me as left
     await supabase
         .from('chat_members')
-        .delete()
+        .update({'left_at': DateTime.now().toUtc().toIso8601String()})
         .eq('chat_id', chatId)
         .eq('user_id', currentUserId);
+  }
+  // Adds new people to an existing group (admin only — screen enforces this)
+  Future<void> addGroupMembers({
+    required String chatId,
+    required List<String> userIds,
+  }) async {
+    if (userIds.isEmpty) return;
+
+    // People who already have a row (they left earlier) -> just re-activate
+    final existing = await supabase
+        .from('chat_members')
+        .select('user_id')
+        .eq('chat_id', chatId)
+        .inFilter('user_id', userIds);
+    final existingIds =
+    (existing as List).map((r) => r['user_id'] as String).toSet();
+
+    if (existingIds.isNotEmpty) {
+      await supabase
+          .from('chat_members')
+          .update({'left_at': null})
+          .eq('chat_id', chatId)
+          .inFilter('user_id', existingIds.toList());
+    }
+
+    // Everyone else gets a brand new row
+    final newIds = userIds.where((id) => !existingIds.contains(id)).toList();
+    if (newIds.isNotEmpty) {
+      await supabase.from('chat_members').insert(
+        newIds.map((id) => {'chat_id': chatId, 'user_id': id}).toList(),
+      );
+    }
   }
 
   // Find an existing 1-on-1 chat between two users, or create a new one
