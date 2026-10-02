@@ -60,6 +60,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   static const int _maxRecordSeconds = 300; //5min
   static const int _maxFileBytes = 5 * 1024 * 1024; // 5 MB
   String get _currentUserId => Supabase.instance.client.auth.currentUser!.id;
+  dynamic _replyingTo; // the message currently being replied to, or null
 
   @override
   void initState() {
@@ -561,7 +562,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   }
 
   Future<void> _sendMessage() async {
-    if (_isSending) return; // block double-tap
+    if (_isSending) return;
 
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
@@ -569,32 +570,85 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     setState(() => _isSending = true);
     AppHaptics.messageSent();
     _messageController.clear();
+    final replyId = _replyingTo?.id;
+    setState(() => _replyingTo = null);
 
     try {
       await ref.read(chatActionsProvider).sendMessage(
         chatId: widget.chatId,
         content: text,
+        replyToId: replyId,
       );
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
   }
 
-  // Long press on my message: ask what to do
   Future<void> _showMessageOptions(dynamic msg) async {
     AppHaptics.medium();
 
-    final action = await AppDialogs.messageOptions(
-      context,
-      canEdit: msg.messageType == 'text', // voice and image can't be edited
-    );
-    if (action == null || !mounted) return;
+    final bool isMine = msg.senderId == _currentUserId;
+    final bool isDeleted = msg.messageType == 'deleted';
 
-    if (action == MessageAction.edit) {
-      await _editMessage(msg);
-    } else {
-      await _deleteMessage(msg);
-    }
+    await showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              if (!isDeleted)
+                ListTile(
+                  leading: const Icon(Icons.reply),
+                  title: const Text('Reply'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    setState(() => _replyingTo = msg);
+                  },
+                ),
+              if (isMine && msg.messageType == 'text')
+                ListTile(
+                  leading: const Icon(Icons.edit_outlined),
+                  title: const Text('Edit'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _editMessage(msg);
+                  },
+                ),
+              // Dusre ka message: sirf "Delete". Apna: "Delete for me"
+              ListTile(
+                leading: const Icon(Icons.delete_outline),
+                title: Text(isMine ? 'Delete for me' : 'Delete'),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  AppHaptics.warning();
+                  await ref.read(chatActionsProvider).deleteForMe(msg.id);
+                  ref.invalidate(messagesProvider(widget.chatId));
+                },
+              ),
+              // Sirf apne message par, aur jo pehle se deleted na ho
+              if (isMine && !isDeleted)
+                ListTile(
+                  leading: const Icon(Icons.delete_forever, color: Colors.red),
+                  title: const Text('Delete for everyone',
+                      style: TextStyle(color: Colors.red)),
+                  onTap: () async {
+                    Navigator.pop(sheetContext);
+                    AppHaptics.warning();
+                    await ref.read(chatActionsProvider).deleteForEveryone(msg.id);
+                    ref.invalidate(messagesProvider(widget.chatId));
+                  },
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _handleChatLockToggle(bool isLocked) async {
@@ -676,7 +730,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     if (!confirmed || !mounted) return;
 
     AppHaptics.warning();
-    await ref.read(chatActionsProvider).deleteMessage(msg.id);
+    await ref.read(chatActionsProvider).deleteForEveryone(msg.id); // or deleteForMe
     ref.invalidate(messagesProvider(widget.chatId));
   }
 
@@ -883,6 +937,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
 
                     List<dynamic> sortedMessages = List.from(messages);
                     sortedMessages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+                    Map<String, dynamic> messagesById = {for (var m in sortedMessages) m.id: m};
 
                     Map<String, String> memberNames = {};
                     if (groupMembersAsync != null && groupMembersAsync.hasValue) {
@@ -922,10 +977,12 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                           mediaUrl: msg.mediaUrl,
                           durationSeconds: msg.durationSeconds,
                           onStopLiveLocation: isMe ? () => _stopLiveLocation(msg.id) : null,
-                          onLongPress: isMe ? () => _showMessageOptions(msg) : null,
+                          onLongPress: () => _showMessageOptions(msg),
                           selectionMode: _isSelectionMode,
                           isSelected: _selectedMessageIds.contains(msg.id),
                           onToggleSelect: () => _toggleMessageSelection(msg.id),
+                          repliedMessage: msg.replyToId != null ? messagesById[msg.replyToId] : null,
+                          onSwipeReply: () => setState(() => _replyingTo = msg),
                         );
                       },
                     );
@@ -943,6 +1000,30 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // NEW: reply preview bar
+                      if (_replyingTo != null)
+                        Container(
+                          color: p.surface,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          child: Row(
+                            children: [
+                              Container(width: 3, height: 36, color: p.primary),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _replyingTo.content,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(fontSize: 13, color: p.textMain),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.close, size: 18),
+                                onPressed: () => setState(() => _replyingTo = null),
+                              ),
+                            ],
+                          ),
+                        ),
                       // Attach panel smoothly grows above the input bar
                       AnimatedSize(
                         duration: const Duration(milliseconds: 220),

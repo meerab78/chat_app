@@ -148,37 +148,37 @@ class ChatActions {
         .eq('user_id', currentUserId);
   }
   // Adds new people to an existing group (admin only — screen enforces this)
-  Future<void> addGroupMembers({
-    required String chatId,
-    required List<String> userIds,
-  }) async {
-    if (userIds.isEmpty) return;
-
-    // People who already have a row (they left earlier) -> just re-activate
-    final existing = await supabase
-        .from('chat_members')
-        .select('user_id')
-        .eq('chat_id', chatId)
-        .inFilter('user_id', userIds);
-    final existingIds =
-    (existing as List).map((r) => r['user_id'] as String).toSet();
-
-    if (existingIds.isNotEmpty) {
-      await supabase
-          .from('chat_members')
-          .update({'left_at': null})
-          .eq('chat_id', chatId)
-          .inFilter('user_id', existingIds.toList());
-    }
-
-    // Everyone else gets a brand new row
-    final newIds = userIds.where((id) => !existingIds.contains(id)).toList();
-    if (newIds.isNotEmpty) {
-      await supabase.from('chat_members').insert(
-        newIds.map((id) => {'chat_id': chatId, 'user_id': id}).toList(),
-      );
-    }
-  }
+  // Future<void> addGroupMembers({
+  //   required String chatId,
+  //   required List<String> userIds,
+  // }) async {
+  //   if (userIds.isEmpty) return;
+  //
+  //   // People who already have a row (they left earlier) -> just re-activate
+  //   final existing = await supabase
+  //       .from('chat_members')
+  //       .select('user_id')
+  //       .eq('chat_id', chatId)
+  //       .inFilter('user_id', userIds);
+  //   final existingIds =
+  //   (existing as List).map((r) => r['user_id'] as String).toSet();
+  //
+  //   if (existingIds.isNotEmpty) {
+  //     await supabase
+  //         .from('chat_members')
+  //         .update({'left_at': null})
+  //         .eq('chat_id', chatId)
+  //         .inFilter('user_id', existingIds.toList());
+  //   }
+  //
+  //   // Everyone else gets a brand new row
+  //   final newIds = userIds.where((id) => !existingIds.contains(id)).toList();
+  //   if (newIds.isNotEmpty) {
+  //     await supabase.from('chat_members').insert(
+  //       newIds.map((id) => {'chat_id': chatId, 'user_id': id}).toList(),
+  //     );
+  //   }
+  // }
 
   // Find an existing 1-on-1 chat between two users, or create a new one
   Future<String> getOrCreateChat(String otherUserId) async {
@@ -244,12 +244,13 @@ class ChatActions {
       'created_by': currentUserId,
     });
 
-    // Step 2: build a list of all members (me + everyone selected)
-    List<Map<String, String>> membersToAdd = [];
-    membersToAdd.add({'chat_id': newChatId, 'user_id': currentUserId});
+    // Step 2: build a list of all members (me + everyone selected).
+    // The creator starts out as an admin; everyone else does not.
+    List<Map<String, dynamic>> membersToAdd = [];
+    membersToAdd.add({'chat_id': newChatId, 'user_id': currentUserId, 'is_admin': true});
 
     for (var userId in memberIds) {
-      membersToAdd.add({'chat_id': newChatId, 'user_id': userId});
+      membersToAdd.add({'chat_id': newChatId, 'user_id': userId, 'is_admin': false});
     }
 
     // Step 3: add everyone as a member in one go
@@ -262,6 +263,7 @@ class ChatActions {
   Future<void> sendMessage({
     required String chatId,
     required String content,
+    String? replyToId, // NEW
   }) async {
     final currentUserId = supabase.auth.currentUser!.id;
     final expiresAt = await AutoClearService().calculateExpiry(chatId);
@@ -272,6 +274,7 @@ class ChatActions {
       'content': content,
       'status': 'sent',
       'expires_at': expiresAt?.toIso8601String(),
+      'reply_to_id': replyToId, // NEW
     });
   }
 
@@ -297,9 +300,20 @@ class ChatActions {
         .eq('id', messageId);
   }
 
-// Delete a message permanently
-  Future<void> deleteMessage(String messageId) async {
-    await supabase.from('messages').delete().eq('id', messageId);
+  // Removes the message for EVERYONE (only works because of the
+  // sender-only RLS policy — recipients can't call this on others' messages)
+  Future<void> deleteForEveryone(String messageId) async {
+    await supabase.from('messages').update({
+      'content': 'This message was deleted',
+      'message_type': 'deleted',
+      'media_url': null,
+      'duration_seconds': null,
+    }).eq('id', messageId);
+  }
+
+  // Hides the message only on THIS account, the other person still sees it
+  Future<void> deleteForMe(String messageId) async {
+    await supabase.rpc('delete_message_for_me', params: {'target_message_id': messageId});
   }
   // "Delete chat" — hides it for ME only, other person still sees it normally
   Future<void> clearChatForMe(String chatId) async {
@@ -374,6 +388,95 @@ class ChatActions {
       'content': '$durationText',
       'status': 'sent',
       'expires_at': expiresAt?.toIso8601String(),
+    });
+  }
+  // Adds new people to an existing group, as regular (non-admin) members,
+// and posts "<name> was added to the group" for each of them
+  Future<void> addGroupMembers({
+    required String chatId,
+    required List<String> userIds,
+  }) async {
+    if (userIds.isEmpty) return;
+
+    List<Map<String, dynamic>> rows = [];
+    for (var userId in userIds) {
+      rows.add({
+        'chat_id': chatId,
+        'user_id': userId,
+        'is_admin': false,
+      });
+    }
+    await supabase.from('chat_members').insert(rows);
+
+    // Naam nikalo taake message mein dikha sakein
+    final profiles = await supabase
+        .from('profiles')
+        .select('id, name')
+        .inFilter('id', userIds);
+
+    for (final row in profiles) {
+      final name = (row['name'] as String?)?.trim();
+      final shownName = (name == null || name.isEmpty) ? 'Someone' : name;
+      await _postSystemMessage(chatId, '$shownName was added to the group');
+    }
+  }
+  // Admin action: removes a member from the group entirely
+  // Admin action: removes a member from the group entirely, and posts
+  // a system message so everyone sees it happened
+  Future<void> removeGroupMember({
+    required String chatId,
+    required String userId,
+    required String memberName,
+  }) async {
+    await supabase
+        .from('chat_members')
+        .delete()
+        .eq('chat_id', chatId)
+        .eq('user_id', userId);
+
+    await _postSystemMessage(chatId, '$memberName was removed from the group');
+  }
+
+  // Admin action: gives someone else admin rights
+  Future<void> makeGroupAdmin({
+    required String chatId,
+    required String userId,
+    required String memberName,
+  }) async {
+    await supabase
+        .from('chat_members')
+        .update({'is_admin': true})
+        .eq('chat_id', chatId)
+        .eq('user_id', userId);
+
+    await _postSystemMessage(chatId, '$memberName is now an admin');
+  }
+
+  // Admin action: takes admin rights away from someone
+  Future<void> removeGroupAdmin({
+    required String chatId,
+    required String userId,
+    required String memberName,
+  }) async {
+    await supabase
+        .from('chat_members')
+        .update({'is_admin': false})
+        .eq('chat_id', chatId)
+        .eq('user_id', userId);
+
+    await _postSystemMessage(chatId, '$memberName is no longer an admin');
+  }
+
+  // Small helper so these 3 actions all post their announcement
+  // the same way auto-delete settings already do
+  Future<void> _postSystemMessage(String chatId, String text) async {
+    final currentUserId = supabase.auth.currentUser!.id;
+    await supabase.from('messages').insert({
+      'chat_id': chatId,
+      'sender_id': currentUserId,
+      'message_type': 'system',
+      'content': text,
+      'status': 'sent',
     });
   }
 }

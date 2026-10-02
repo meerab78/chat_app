@@ -8,6 +8,8 @@ class MessageModel {
   final String messageType;
   final String? mediaUrl;
   final int? durationSeconds;
+  final String? replyToId; // NEW
+  final List<String> deletedFor;
 
   MessageModel({
     required this.id,
@@ -19,6 +21,8 @@ class MessageModel {
     this.messageType = 'text',
     this.mediaUrl,
     this.durationSeconds,
+    this.replyToId,
+    this.deletedFor = const [],
   });
 
   factory MessageModel.fromJson(Map<String, dynamic> json) {
@@ -32,6 +36,11 @@ class MessageModel {
       messageType: json['message_type'] as String? ?? 'text',
       mediaUrl: json['media_url'] as String?,
       durationSeconds: json['duration_seconds'] as int?,
+      replyToId: json['reply_to_id'] as String?,
+      deletedFor: (json['deleted_for'] as List?)
+          ?.map((e) => e as String)
+          .toList() ??
+          [],
     );
   }
 }

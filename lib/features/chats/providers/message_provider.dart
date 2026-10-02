@@ -39,7 +39,6 @@ final messagesProvider = StreamProvider.autoDispose
       .map((rows) => rows.map((json) => MessageModel.fromJson(json)).toList());
 
   yield* stream.map((messages) {
-    // Remove duplicates that have the same id
     final seenIds = <String>{};
     final uniqueMessages = <MessageModel>[];
     for (final m in messages) {
@@ -48,8 +47,12 @@ final messagesProvider = StreamProvider.autoDispose
       }
     }
 
-    // CHANGED: the old leftAt check is gone (not needed anymore)
-    if (clearedAt == null) return uniqueMessages;
-    return uniqueMessages.where((m) => m.createdAt.isAfter(clearedAt)).toList();
+    // NEW: jo messages maine "delete for me" kiye, woh hide karo
+    final visible = uniqueMessages
+        .where((m) => !m.deletedFor.contains(currentUserId))
+        .toList();
+
+    if (clearedAt == null) return visible;
+    return visible.where((m) => m.createdAt.isAfter(clearedAt)).toList();
   });
 });

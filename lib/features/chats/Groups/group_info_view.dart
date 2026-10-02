@@ -150,7 +150,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
       ),
       body: infoAsync.when(
         data: (info) {
-          final bool isAdmin = info.createdBy == _myId && !info.iLeft;
+          final bool isAdmin = info.amIAdmin && !info.iLeft;
           final bool hasAvatar = info.avatarUrl != null && info.avatarUrl!.isNotEmpty;
 
           return ListView(
@@ -269,7 +269,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                 child: Column(
                   children: info.members.map((m) {
                     final bool isMe = m.id == _myId;
-                    final bool isMemberAdmin = m.id == info.createdBy;
+                    final bool isMemberAdmin = m.isAdmin;
                     final bool memberHasAvatar =
                         m.avatarUrl != null && m.avatarUrl!.isNotEmpty;
 
@@ -299,24 +299,44 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                         m.email,
                         style: TextStyle(color: p.textGrey, fontSize: 12.5),
                       ),
-                      trailing: isMemberAdmin
-                          ? Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: p.accent.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          'Admin',
-                          style: TextStyle(
-                            color: p.primary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      )
-                          : null,
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (isMemberAdmin)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: p.accent.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                'Admin',
+                                style: TextStyle(
+                                  color: p.primary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          // Admin controls menu — shown only to admins, and
+                          // never on my own row
+                          if (isAdmin && !isMe)
+                            PopupMenuButton<String>(
+                              icon: Icon(Icons.more_vert, color: p.icon, size: 20),
+                              onSelected: (value) => _handleMemberAction(value, m),
+                              itemBuilder: (context) => [
+                                PopupMenuItem(
+                                  value: isMemberAdmin ? 'remove_admin' : 'make_admin',
+                                  child: Text(isMemberAdmin ? 'Remove as admin' : 'Make admin'),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'remove_member',
+                                  child: Text('Remove from group', style: TextStyle(color: Colors.red)),
+                                ),
+                              ],
+                            ),
+                        ],
+                      ),
                     );
                   }).toList(),
                 ),
@@ -343,5 +363,32 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
         error: (err, stack) => Center(child: Text('Error: $err')),
       ),
     );
+  }
+  // Runs whichever admin action was picked from a member's menu
+  Future<void> _handleMemberAction(String action, GroupMemberInfo member) async {
+    try {
+      if (action == 'make_admin') {
+        await ref.read(chatActionsProvider).makeGroupAdmin(
+          chatId: widget.chatId,
+          userId: member.id,
+          memberName: member.name,
+        );
+      } else if (action == 'remove_admin') {
+        await ref.read(chatActionsProvider).removeGroupAdmin(
+          chatId: widget.chatId,
+          userId: member.id,
+          memberName: member.name,
+        );
+      } else if (action == 'remove_member') {
+        await ref.read(chatActionsProvider).removeGroupMember(
+          chatId: widget.chatId,
+          userId: member.id,
+          memberName: member.name,
+        );
+      }
+      _refreshAll();
+    } catch (e) {
+      _showError('Action failed: $e');
+    }
   }
 }

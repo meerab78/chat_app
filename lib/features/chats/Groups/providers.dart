@@ -6,20 +6,23 @@ class GroupMemberInfo {
   final String name;
   final String email;
   final String? avatarUrl;
+  final bool isAdmin;
 
   const GroupMemberInfo({
     required this.id,
     required this.name,
     required this.email,
     this.avatarUrl,
+    required this.isAdmin,
   });
 }
 
 class GroupInfo {
   final String name;
   final String? avatarUrl;
-  final String? createdBy; // the admin's user id
+  final String? createdBy; // who originally created the group
   final bool iLeft; // true if I already left this group
+  final bool amIAdmin; // true if MY OWN membership row has admin rights
   final List<GroupMemberInfo> members; // only people still in the group
 
   const GroupInfo({
@@ -27,6 +30,7 @@ class GroupInfo {
     required this.avatarUrl,
     required this.createdBy,
     required this.iLeft,
+    required this.amIAdmin,
     required this.members,
   });
 }
@@ -45,15 +49,17 @@ FutureProvider.autoDispose.family<GroupInfo, String>((ref, chatId) async {
 
   final rows = await supabase
       .from('chat_members')
-      .select('user_id, left_at, profiles!inner(name, email, avatar_url)')
+      .select('user_id, left_at, is_admin, profiles!inner(name, email, avatar_url)')
       .eq('chat_id', chatId);
 
   final createdBy = chat['created_by'] as String?;
   final members = <GroupMemberInfo>[];
   bool iLeft = false;
+  bool amIAdmin = false;
 
   for (final row in rows) {
     final userId = row['user_id'] as String;
+    final bool rowIsAdmin = row['is_admin'] as bool? ?? false;
 
     // People who left are not shown in the members list
     if (row['left_at'] != null) {
@@ -61,19 +67,22 @@ FutureProvider.autoDispose.family<GroupInfo, String>((ref, chatId) async {
       continue;
     }
 
+    if (userId == myId) amIAdmin = rowIsAdmin;
+
     final profile = row['profiles'];
     members.add(GroupMemberInfo(
       id: userId,
       name: profile['name'] as String? ?? '',
       email: profile['email'] as String? ?? '',
       avatarUrl: profile['avatar_url'] as String?,
+      isAdmin: rowIsAdmin,
     ));
   }
 
-  // Admin first, everyone else A-Z
+  // Admins first, everyone else A-Z
   members.sort((a, b) {
-    if (a.id == createdBy) return -1;
-    if (b.id == createdBy) return 1;
+    if (a.isAdmin && !b.isAdmin) return -1;
+    if (!a.isAdmin && b.isAdmin) return 1;
     return a.name.toLowerCase().compareTo(b.name.toLowerCase());
   });
 
@@ -82,6 +91,7 @@ FutureProvider.autoDispose.family<GroupInfo, String>((ref, chatId) async {
     avatarUrl: chat['avatar_url'] as String?,
     createdBy: createdBy,
     iLeft: iLeft,
+    amIAdmin: amIAdmin,
     members: members,
   );
 });
