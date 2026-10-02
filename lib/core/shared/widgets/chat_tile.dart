@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../theme/theme_provider.dart';
+import 'avatar_viewer_screen.dart';
 
 class ChatUi {
   static const Color ink = Color(0xFF111B21);
@@ -207,40 +208,53 @@ class ChatTile extends ConsumerWidget {
           child: Row(
             children: [
               // Avatar (unread ho to green ring)
-              Container(
-                padding: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: hasUnread ? p.accent : Colors.transparent,
-                    width: 2,
+              // Avatar (unread ho to green ring) — tap karne se sirf photo view hoti hai
+              GestureDetector(
+                onTap: hasAvatar
+                    ? () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AvatarViewerScreen(
+                      imageUrl: avatarUrl!,
+                      title: name,
+                    ),
                   ),
-                ),
+                )
+                    : null,
                 child: Container(
-                  width: 48,
-                  height: 48,
+                  padding: const EdgeInsets.all(2),
                   decoration: BoxDecoration(
-                    color: avatarColor.withOpacity(0.14),
                     shape: BoxShape.circle,
-                    // Show the photo when there is one
-                    image: hasAvatar
-                        ? DecorationImage(
-                      image: NetworkImage(avatarUrl!),
-                      fit: BoxFit.cover,
-                    )
-                        : null,
+                    border: Border.all(
+                      color: hasUnread ? p.accent : Colors.transparent,
+                      width: 2,
+                    ),
                   ),
-                  alignment: Alignment.center,
-                  child: hasAvatar
-                      ? null
-                      : isGroup
-                      ? Icon(Icons.groups_rounded, color: avatarColor, size: 24)
-                      : Text(
-                    name.isNotEmpty ? name[0].toUpperCase() : '?',
-                    style: TextStyle(
-                      color: avatarColor,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: avatarColor.withOpacity(0.14),
+                      shape: BoxShape.circle,
+                      image: hasAvatar
+                          ? DecorationImage(
+                        image: NetworkImage(avatarUrl!),
+                        fit: BoxFit.cover,
+                      )
+                          : null,
+                    ),
+                    alignment: Alignment.center,
+                    child: hasAvatar
+                        ? null
+                        : isGroup
+                        ? Icon(Icons.groups_rounded, color: avatarColor, size: 24)
+                        : Text(
+                      name.isNotEmpty ? name[0].toUpperCase() : '?',
+                      style: TextStyle(
+                        color: avatarColor,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),

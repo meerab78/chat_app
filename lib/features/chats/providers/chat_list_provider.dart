@@ -32,6 +32,7 @@ final chatListProvider = FutureProvider<List<ChatModel>>((ref) async {
 
     String displayName;
     String? avatarUrl;
+    String? otherUsername;
 
     if (isGroup) {
       displayName = chatData['name'] as String? ?? 'Group';
@@ -39,14 +40,20 @@ final chatListProvider = FutureProvider<List<ChatModel>>((ref) async {
     } else {
       final otherMember = await supabase
           .from('chat_members')
-          .select('profiles!inner(name, avatar_url)') // CHANGED: avatar_url added
+          .select('profiles!inner(name, username, avatar_url)') // CHANGED: username added
           .eq('chat_id', chatId)
           .neq('user_id', currentUserId)
           .maybeSingle();
 
       if (otherMember != null) {
-        displayName = otherMember['profiles']['name'] as String;
-        avatarUrl = otherMember['profiles']['avatar_url'] as String?;
+        final otherProfile = otherMember['profiles'];
+        final rawName = otherProfile['name'] as String;
+        final username = otherProfile['username'] as String?;
+
+        // Prefer the username if the user has set one, else fall back to name
+        displayName = (username != null && username.isNotEmpty) ? username : rawName;
+        otherUsername = username;
+        avatarUrl = otherProfile['avatar_url'] as String?;
       } else {
         displayName = 'Unknown';
       }
@@ -111,6 +118,7 @@ final chatListProvider = FutureProvider<List<ChatModel>>((ref) async {
       unreadCount: unreadCount,
       avatarUrl: avatarUrl,
       createdBy: chatData['created_by'] as String?,
+      otherUsername: otherUsername,
     );
   });
 

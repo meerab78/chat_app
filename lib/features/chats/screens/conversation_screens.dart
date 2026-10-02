@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/shared/widgets/avatar_viewer_screen.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../core/utils/app_dialogs.dart';
 import '../../../core/utils/app_haptics.dart';
@@ -27,6 +28,7 @@ import '../providers/chat_wallpaper_provider.dart';
 import '../providers/message_provider.dart';
 import '../providers/group_members_provider.dart';
 import '../widgets/message_bubble.dart';
+import 'contact_info_view.dart';
 import 'forward_screen.dart';
 import 'image_preview_view.dart';
 
@@ -34,12 +36,14 @@ class ConversationScreen extends ConsumerStatefulWidget {
   final String chatId;
   final String otherUserName;
   final bool isGroup;
+  final String? otherAvatarUrl;
 
   const ConversationScreen({
     super.key,
     required this.chatId,
     required this.otherUserName,
     this.isGroup = false,
+    this.otherAvatarUrl,
   });
 
   @override
@@ -117,6 +121,16 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => GroupInfoScreen(chatId: widget.chatId),
+      ),
+    );
+  }
+
+  // NEW: Opens the Contact Info screen (only used for 1-on-1 chats)
+  void _openContactInfo() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ContactInfoScreen(chatId: widget.chatId),
       ),
     );
   }
@@ -704,27 +718,40 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
         titleSpacing: 0,
         title: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          // Only group chats have an info screen
-          onTap: widget.isGroup ? _openGroupInfo : null,
+          // Group chats open Group Info, 1-on-1 chats open Contact Info
+          onTap: widget.isGroup ? _openGroupInfo : _openContactInfo, // CHANGED
           child: Row(
             children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: widget.isGroup
-                    ? Colors.teal.shade100
-                    : avatarColorFor(headerName),
-                backgroundImage:
-                hasHeaderAvatar ? NetworkImage(headerAvatarUrl!) : null,
-                child: hasHeaderAvatar
-                    ? null
-                    : widget.isGroup
-                    ? const Icon(Icons.group, color: Colors.teal, size: 18)
-                    : Text(
-                  headerName.isNotEmpty ? headerName[0].toUpperCase() : '?',
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold),
+              GestureDetector(
+                onTap: widget.otherAvatarUrl != null
+                    ? () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AvatarViewerScreen(
+                      imageUrl: widget.otherAvatarUrl!,
+                      title: widget.otherUserName,
+                    ),
+                  ),
+                )
+                    : null,
+                child: CircleAvatar(
+                  radius: 18,
+                  backgroundImage: widget.otherAvatarUrl != null
+                      ? NetworkImage(widget.otherAvatarUrl!)
+                      : null,
+                  backgroundColor: widget.isGroup
+                      ? Colors.teal.shade100
+                      : avatarColorFor(widget.otherUserName),
+                  child: widget.otherAvatarUrl == null
+                      ? (widget.isGroup
+                      ? const Icon(Icons.group, color: Colors.teal, size: 18)
+                      : Text(
+                    widget.otherUserName.isNotEmpty
+                        ? widget.otherUserName[0].toUpperCase()
+                        : '?',
+                    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                  ))
+                      : null,
                 ),
               ),
               const SizedBox(width: 10),

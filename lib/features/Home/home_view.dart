@@ -79,6 +79,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
           chatId: chat.id,
           otherUserName: name,
           isGroup: chat.isGroup,
+          otherAvatarUrl: chat.avatarUrl,
         ),
       ),
     );

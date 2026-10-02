@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
-// Fetches the current user's profile row (name, email, phone, avatar_url)
+// Fetches the current user's profile row
 final myProfileProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {
   final supabase = Supabase.instance.client;
   final userId = supabase.auth.currentUser!.id;
@@ -15,13 +15,24 @@ final myProfileProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref)
 class ProfileActions {
   final _supabase = Supabase.instance.client;
 
-  // Updates name and phone for the logged-in user
-  Future<void> updateProfile({required String name, required String phone}) async {
+  // Updates name, username and bio for the logged-in user
+  Future<void> updateProfile({
+    required String name,
+    required String username,
+    required String bio,
+  }) async {
     final userId = _supabase.auth.currentUser!.id;
     await _supabase.from('profiles').update({
       'name': name,
-      'phone': phone,
+      'username': username.trim().toLowerCase(),
+      'bio': bio,
     }).eq('id', userId);
+  }
+
+  // Requests an email change. Supabase sends a confirmation link to the
+  // NEW email address — until the user clicks it, the old email stays active.
+  Future<void> requestEmailChange(String newEmail) async {
+    await _supabase.auth.updateUser(UserAttributes(email: newEmail));
   }
 
   // Uploads a new avatar image and saves its link on the profile
@@ -42,10 +53,7 @@ class ProfileActions {
     required String newPassword,
   }) async {
     final email = _supabase.auth.currentUser!.email!;
-
-    // Re-check the current password is correct before allowing the change
     await _supabase.auth.signInWithPassword(email: email, password: currentPassword);
-
     await _supabase.auth.updateUser(UserAttributes(password: newPassword));
   }
 }
