@@ -30,7 +30,7 @@ class MessageBubble extends ConsumerWidget {
   // NEW: reply support
   final dynamic repliedMessage; // the MessageModel this one replies to, or null
   final VoidCallback? onSwipeReply; // called when the user swipes the bubble
-
+  final String? repliedSenderName;
   const MessageBubble({
     super.key,
     required this.text,
@@ -48,6 +48,7 @@ class MessageBubble extends ConsumerWidget {
     this.onToggleSelect,
     this.repliedMessage,
     this.onSwipeReply,
+    this.repliedSenderName,
   });
 
   static const Color _sentColor = Color(0xFFDCF8C6);
@@ -58,6 +59,8 @@ class MessageBubble extends ConsumerWidget {
     switch (msg.messageType as String) {
       case 'image':
         return '📷 Photo';
+      case 'sticker':
+        return '😊 Sticker';
       case 'voice':
         return '🎤 Voice message';
       case 'file':
@@ -91,6 +94,325 @@ class MessageBubble extends ConsumerWidget {
       );
     }
 
+    // NEW: a reply bubble must never shrink to just the text width,
+    // otherwise the quoted box and the time look squeezed.
+    final bool hasReply = repliedMessage != null;
+    // NEW: for text replies, let the quoted box stretch to the bubble width.
+    // (Only text / deleted, because those are safe inside IntrinsicWidth.)
+    final bool stretchQuote =
+        hasReply && (messageType == 'text' || messageType == 'deleted');
+
+    final Widget bubbleContent = Column(
+      crossAxisAlignment:
+      stretchQuote ? CrossAxisAlignment.stretch : CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (senderName != null && !isMe)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: Text(
+              senderName!,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Colors.teal,
+              ),
+            ),
+          ),
+
+        // ===== NEW: Quoted reply preview =====
+        if (repliedMessage != null)
+          Container(
+            margin: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(8),
+              border: Border(left: BorderSide(color: p.primary, width: 3)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (repliedSenderName != null)
+                  Text(
+                    repliedSenderName!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: p.primary,
+                    ),
+                  ),
+                Text(
+                  _previewFor(repliedMessage),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12.5, color: p.textGrey),
+                ),
+              ],
+            ),
+          ),
+        // ===== END Quoted reply preview =====
+
+        // ===== DELETED MESSAGE =====
+        if (messageType == 'deleted')
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.block, size: 15, color: p.textGrey),
+                const SizedBox(width: 6),
+                Text(
+                  'This message was deleted',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontStyle: FontStyle.italic,
+                    color: p.textGrey,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        // ===== END DELETED MESSAGE =====
+
+        if (messageType == 'image' && mediaUrl != null)
+          GestureDetector(
+            onTap: () {
+              if (selectionMode) {
+                onToggleSelect?.call();
+                return;
+              }
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => FullscreenImageScreen(imageUrl: mediaUrl!),
+                ),
+              );
+            },
+            onDoubleTap: onToggleSelect,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  width: 220,
+                  height: 220,
+                  child: Image.network(
+                    mediaUrl!,
+                    fit: BoxFit.cover,
+                    loadingBuilder: (context, child, progress) {
+                      if (progress == null) return child;
+                      return Container(
+                        color: Colors.grey.shade200,
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            value: progress.expectedTotalBytes != null
+                                ? progress.cumulativeBytesLoaded /
+                                progress.expectedTotalBytes!
+                                : null,
+                          ),
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error, stack) => Container(
+                      color: Colors.grey.shade200,
+                      child: const Center(
+                        child: Icon(Icons.broken_image, color: Colors.grey, size: 32),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        // ===== STICKER (plain image, no download needed — Giphy hosts it) =====
+        if (messageType == 'sticker' && mediaUrl != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Image.network(
+              mediaUrl!,
+              width: 130,
+              height: 130,
+              fit: BoxFit.contain,
+              loadingBuilder: (context, child, progress) {
+                if (progress == null) return child;
+                return const SizedBox(
+                  width: 130,
+                  height: 130,
+                  child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                );
+              },
+              errorBuilder: (context, error, stack) => const SizedBox(
+                width: 130,
+                height: 130,
+                child: Icon(Icons.broken_image, color: Colors.grey),
+              ),
+            ),
+          ),
+        // ===== END STICKER =====
+        if (messageType == 'voice' && mediaUrl != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4, top: 2),
+            child: VoiceMessagePlayer(
+              audioUrl: mediaUrl!,
+              durationSeconds: durationSeconds ?? 0,
+              isMe: isMe,
+            ),
+          ),
+
+        if (messageType == 'file' && mediaUrl != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4, top: 2),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () {
+                if (selectionMode) {
+                  onToggleSelect?.call();
+                  return;
+                }
+                _downloadAndOpenFile(mediaUrl!, text);
+              },
+              onDoubleTap: onToggleSelect,
+              child: Container(
+                width: 220,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.blueGrey.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.insert_drive_file, color: Colors.blueGrey),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            text,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87),
+                          ),
+                          const SizedBox(height: 2),
+                          const Text(
+                            'Tap to open',
+                            style: TextStyle(fontSize: 11, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+        if (messageType == 'location' && mediaUrl != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4, top: 2),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                width: 220,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    InkWell(
+                      onTap: () {
+                        if (selectionMode) {
+                          onToggleSelect?.call();
+                          return;
+                        }
+                        launchUrl(
+                          Uri.parse(mediaUrl!),
+                          mode: LaunchMode.externalApplication,
+                        );
+                      },
+                      onDoubleTap: onToggleSelect,
+                      child: SizedBox(
+                        height: 130,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Image.network(
+                              _staticMapUrlFrom(mediaUrl!),
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stack) => Container(
+                                color: Colors.grey.shade200,
+                                child: const Center(
+                                  child: Icon(Icons.map, color: Colors.grey, size: 32),
+                                ),
+                              ),
+                            ),
+                            const Center(
+                              child: Icon(Icons.location_on, color: Colors.redAccent, size: 34),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    _LiveLocationFooter(
+                      label: text,
+                      sentAt: time,
+                      totalSeconds: durationSeconds,
+                      showStopButton: isMe,
+                      onStop: onStopLiveLocation,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+        if (messageType != 'voice' && messageType != 'deleted' && messageType != 'sticker')
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 15,
+                height: 1.3,
+                color: isMe ? p.myBubbleText : p.otherBubbleText,
+              ),
+            ),
+          ),
+
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              formatMessageTime(time),
+              style: TextStyle(
+                fontSize: 11,
+                color: isMe ? p.myBubbleText.withOpacity(0.7) : p.textGrey,
+              ),
+            ),
+            if (isMe) ...[
+              const SizedBox(width: 3),
+              _StatusTicks(status: status),
+            ],
+          ],
+        ),
+      ],
+    );
+
     return GestureDetector(
       onLongPress: onLongPress,
       onDoubleTap: onToggleSelect,
@@ -108,6 +430,8 @@ class MessageBubble extends ConsumerWidget {
             child: Container(
               margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
               constraints: BoxConstraints(
+                // NEW: reply bubbles are never narrower than 150
+                minWidth: hasReply ? 150 : 0,
                 maxWidth: MediaQuery.of(context).size.width * 0.78,
               ),
               decoration: BoxDecoration(
@@ -125,274 +449,8 @@ class MessageBubble extends ConsumerWidget {
                 ],
               ),
               padding: const EdgeInsets.fromLTRB(10, 6, 8, 4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (senderName != null && !isMe)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 2),
-                      child: Text(
-                        senderName!,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.teal,
-                        ),
-                      ),
-                    ),
-
-                  // ===== NEW: Quoted reply preview =====
-                  if (repliedMessage != null)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border(left: BorderSide(color: p.primary, width: 3)),
-                      ),
-                      child: Text(
-                        _previewFor(repliedMessage),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 12.5, color: p.textGrey),
-                      ),
-                    ),
-                  // ===== END Quoted reply preview =====
-
-                  // ===== DELETED MESSAGE =====
-                  if (messageType == 'deleted')
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 2),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.block, size: 15, color: p.textGrey),
-                          const SizedBox(width: 6),
-                          Text(
-                            'This message was deleted',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontStyle: FontStyle.italic,
-                              color: p.textGrey,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  // ===== END DELETED MESSAGE =====
-
-                  if (messageType == 'image' && mediaUrl != null)
-                    GestureDetector(
-                      onTap: () {
-                        if (selectionMode) {
-                          onToggleSelect?.call();
-                          return;
-                        }
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => FullscreenImageScreen(imageUrl: mediaUrl!),
-                          ),
-                        );
-                      },
-                      onDoubleTap: onToggleSelect,
-                      child: Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: SizedBox(
-                            width: 220,
-                            height: 220,
-                            child: Image.network(
-                              mediaUrl!,
-                              fit: BoxFit.cover,
-                              loadingBuilder: (context, child, progress) {
-                                if (progress == null) return child;
-                                return Container(
-                                  color: Colors.grey.shade200,
-                                  child: Center(
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      value: progress.expectedTotalBytes != null
-                                          ? progress.cumulativeBytesLoaded /
-                                          progress.expectedTotalBytes!
-                                          : null,
-                                    ),
-                                  ),
-                                );
-                              },
-                              errorBuilder: (context, error, stack) => Container(
-                                color: Colors.grey.shade200,
-                                child: const Center(
-                                  child: Icon(Icons.broken_image, color: Colors.grey, size: 32),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-
-                  if (messageType == 'voice' && mediaUrl != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 4, top: 2),
-                      child: VoiceMessagePlayer(
-                        audioUrl: mediaUrl!,
-                        durationSeconds: durationSeconds ?? 0,
-                        isMe: isMe,
-                      ),
-                    ),
-
-                  if (messageType == 'file' && mediaUrl != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 4, top: 2),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(10),
-                        onTap: () {
-                          if (selectionMode) {
-                            onToggleSelect?.call();
-                            return;
-                          }
-                          _downloadAndOpenFile(mediaUrl!, text);
-                        },
-                        onDoubleTap: onToggleSelect,
-                        child: Container(
-                          width: 220,
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: Colors.blueGrey.shade50,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Icon(Icons.insert_drive_file, color: Colors.blueGrey),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      text,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.black87),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    const Text(
-                                      'Tap to open',
-                                      style: TextStyle(fontSize: 11, color: Colors.grey),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-
-                  if (messageType == 'location' && mediaUrl != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 4, top: 2),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: SizedBox(
-                          width: 220,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              InkWell(
-                                onTap: () {
-                                  if (selectionMode) {
-                                    onToggleSelect?.call();
-                                    return;
-                                  }
-                                  launchUrl(
-                                    Uri.parse(mediaUrl!),
-                                    mode: LaunchMode.externalApplication,
-                                  );
-                                },
-                                onDoubleTap: onToggleSelect,
-                                child: SizedBox(
-                                  height: 130,
-                                  child: Stack(
-                                    fit: StackFit.expand,
-                                    children: [
-                                      Image.network(
-                                        _staticMapUrlFrom(mediaUrl!),
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (context, error, stack) => Container(
-                                          color: Colors.grey.shade200,
-                                          child: const Center(
-                                            child: Icon(Icons.map, color: Colors.grey, size: 32),
-                                          ),
-                                        ),
-                                      ),
-                                      const Center(
-                                        child: Icon(Icons.location_on, color: Colors.redAccent, size: 34),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              _LiveLocationFooter(
-                                label: text,
-                                sentAt: time,
-                                totalSeconds: durationSeconds,
-                                showStopButton: isMe,
-                                onStop: onStopLiveLocation,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-
-                  if (messageType != 'voice' && messageType != 'deleted')
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 2),
-                      child: Text(
-                        text,
-                        style: TextStyle(
-                          fontSize: 15,
-                          height: 1.3,
-                          color: isMe ? p.myBubbleText : p.otherBubbleText,
-                        ),
-                      ),
-                    ),
-
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        formatMessageTime(time),
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: isMe ? p.myBubbleText.withOpacity(0.7) : p.textGrey,
-                        ),
-                      ),
-                      if (isMe) ...[
-                        const SizedBox(width: 3),
-                        _StatusTicks(status: status),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
+              // NEW: IntrinsicWidth only for text replies (quote fills bubble)
+              child: stretchQuote ? IntrinsicWidth(child: bubbleContent) : bubbleContent,
             ),
           ),
           if (selectionMode)

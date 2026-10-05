@@ -1,14 +1,28 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
+import 'package:open_file/open_file.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../core/shared/widgets/avatar_viewer_screen.dart';
 import '../../auth/Profile/other_user_profile_provider.dart';
+import '../providers/message_provider.dart';
+import 'full_screen_image.dart';
 
 
 class ContactInfoScreen extends ConsumerWidget {
   final String chatId;
   const ContactInfoScreen({super.key, required this.chatId});
-
+  // Same download-then-open pattern used in message bubbles
+  Future<void> _downloadAndOpenFile(String url, String fileName) async {
+    final response = await http.get(Uri.parse(url));
+    final tempDir = await getTemporaryDirectory();
+    final localFile = File('${tempDir.path}/$fileName');
+    await localFile.writeAsBytes(response.bodyBytes);
+    await OpenFile.open(localFile.path);
+  }
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final p = ref.watch(themeProvider).preset;
@@ -129,6 +143,105 @@ class ContactInfoScreen extends ConsumerWidget {
                         surface: p.surface,
                         textMain: p.textMain,
                         textGrey: p.textGrey,
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        'Shared media',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: p.textMain,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Consumer(
+                        builder: (context, galleryRef, _) {
+                          final messagesAsync =
+                          galleryRef.watch(messagesProvider(chatId));
+
+                          return messagesAsync.when(
+                            data: (messages) {
+                              // Pick out only image and file messages
+                              List<dynamic> imageMessages = [];
+                              List<dynamic> fileMessages = [];
+                              for (var m in messages) {
+                                if (m.messageType == 'image' && m.mediaUrl != null) {
+                                  imageMessages.add(m);
+                                } else if (m.messageType == 'file' && m.mediaUrl != null) {
+                                  fileMessages.add(m);
+                                }
+                              }
+
+                              if (imageMessages.isEmpty && fileMessages.isEmpty) {
+                                return Text(
+                                  'No shared media yet',
+                                  style: TextStyle(color: p.textGrey, fontSize: 13),
+                                );
+                              }
+
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (imageMessages.isNotEmpty)
+                                    GridView.builder(
+                                      shrinkWrap: true,
+                                      physics: const NeverScrollableScrollPhysics(),
+                                      itemCount: imageMessages.length,
+                                      gridDelegate:
+                                      const SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: 3,
+                                        crossAxisSpacing: 6,
+                                        mainAxisSpacing: 6,
+                                      ),
+                                      itemBuilder: (context, index) {
+                                        final msg = imageMessages[index];
+                                        return GestureDetector(
+                                          onTap: () => Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => FullscreenImageScreen(
+                                                imageUrl: msg.mediaUrl,
+                                              ),
+                                            ),
+                                          ),
+                                          child: ClipRRect(
+                                            borderRadius: BorderRadius.circular(8),
+                                            child: Image.network(
+                                              msg.mediaUrl,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (context, error, stack) =>
+                                                  Container(color: p.surface),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  if (fileMessages.isNotEmpty) ...[
+                                    const SizedBox(height: 12),
+                                    for (var msg in fileMessages)
+                                      Container(
+                                        margin: const EdgeInsets.only(bottom: 8),
+                                        child: ListTile(
+                                          contentPadding: EdgeInsets.zero,
+                                          leading: Icon(Icons.insert_drive_file, color: p.primary),
+                                          title: Text(
+                                            msg.content,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(color: p.textMain, fontSize: 13.5),
+                                          ),
+                                          onTap: () =>
+                                              _downloadAndOpenFile(msg.mediaUrl, msg.content),
+                                        ),
+                                      ),
+                                  ],
+                                ],
+                              );
+                            },
+                            loading: () => const Center(child: CircularProgressIndicator()),
+                            error: (err, stack) => Text('Error: $err'),
+                          );
+                        },
                       ),
                     ],
                   ),

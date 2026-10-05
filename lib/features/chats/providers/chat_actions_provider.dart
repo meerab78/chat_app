@@ -355,6 +355,23 @@ class ChatActions {
       'expires_at': expiresAt?.toIso8601String(),
     });
   }
+  // Sends a sticker picked from Giphy. We just save the sticker's image
+  // URL — no upload needed, since Giphy hosts the image itself.
+  Future<void> sendStickerMessage({
+    required String chatId,
+    required String stickerImageUrl,
+  }) async {
+    final currentUserId = supabase.auth.currentUser!.id;
+
+    await supabase.from('messages').insert({
+      'chat_id': chatId,
+      'sender_id': currentUserId,
+      'message_type': 'sticker',
+      'media_url': stickerImageUrl,
+      'content': 'Sticker',
+      'status': 'sent',
+    });
+  }
   // Upload a voice recording to Supabase Storage and send it as a message
   Future<void> sendVoiceMessage({
     required String chatId,

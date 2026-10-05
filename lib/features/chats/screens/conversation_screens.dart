@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:enough_giphy_flutter/enough_giphy_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
@@ -14,6 +16,8 @@ import '../../../core/utils/app_haptics.dart';
 import '../../Auto Clear Chat/provider.dart';
 import '../../Auto Clear Chat/widget/auto_clear_sheet.dart';
 import '../../Home/home_view.dart';
+import '../../auth/Profile/online_status_provider.dart';
+import '../../auth/Profile/other_user_profile_provider.dart';
 import '../../chat lock/provider.dart';
 import '../../chat lock/screens/enter_pin_view.dart';
 import '../../chat lock/screens/set_pin_view.dart';
@@ -55,7 +59,10 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   bool _isSending = false;
   bool _showAttachPanel = false; // controls the smooth attach panel
   Timer? _autoClearTimer;
+  Timer? _heartbeatTimer;
   final Set<String> _selectedMessageIds = {};
+  // Messages hidden instantly on screen while the server is still deleting them
+  final Set<String> _hiddenMessageIds = {};
   bool get _isSelectionMode => _selectedMessageIds.isNotEmpty;
   static const int _maxRecordSeconds = 300; //5min
   static const int _maxFileBytes = 5 * 1024 * 1024; // 5 MB
@@ -76,12 +83,17 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     _autoClearTimer = Timer.periodic(const Duration(seconds: 12), (_) {
       _cleanupExpiredMessages();
     });
+    ref.read(onlineStatusServiceProvider).updateMyLastSeen();
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+      ref.read(onlineStatusServiceProvider).updateMyLastSeen();
+    });
   }
 
   @override
   void dispose() {
     _autoClearTimer?.cancel();
     _messageController.dispose();
+    _heartbeatTimer?.cancel();
     super.dispose();
   }
 
@@ -245,6 +257,17 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     return '$minutes:$seconds';
   }
 
+  // Reply mein dikhane ke liye naam: apna ho to "You", warna sender ka naam
+  String _nameFor(dynamic msg) {
+    if (msg == null) return '';
+    if (msg.senderId == _currentUserId) return 'You';
+    if (widget.isGroup) {
+      final names = ref.read(groupMembersProvider(widget.chatId)).value;
+      return names?[msg.senderId] ?? 'Unknown';
+    }
+    return widget.otherUserName;
+  }
+
   Future<void> _pickAndSendImage(ImageSource source) async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(
@@ -291,7 +314,35 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     FocusScope.of(context).unfocus(); // hide keyboard first, like WhatsApp
     setState(() => _showAttachPanel = !_showAttachPanel);
   }
+  Future<void> _openStickerPicker() async {
+    final giphyApiKey = dotenv.env['GIPHY_API_KEY'] ?? '';
 
+    if (giphyApiKey.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Giphy API key is missing')),
+      );
+      return;
+    }
+
+    final gif = await Giphy.getGif(
+      context: context,
+      apiKey: giphyApiKey,
+      type: GiphyType.stickers, // stickers, not regular GIFs
+    );
+
+    if (gif == null || !mounted) return;
+
+    // Giphy gives several image sizes — "original" is good quality for chat
+    final stickerUrl = gif.images?.original?.url;
+    if (stickerUrl == null) return;
+
+    AppHaptics.messageSent();
+    await ref.read(chatActionsProvider).sendStickerMessage(
+      chatId: widget.chatId,
+      stickerImageUrl: stickerUrl,
+    );
+  }
   Future<void> _pickAndSendFile() async {
     final PlatformFile? pickedFile = await FilePicker.pickFile();
     if (pickedFile == null || pickedFile.path == null) return;
@@ -473,7 +524,6 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   // Called when the sender taps "Stop sharing" on their own live location
   Future<void> _stopLiveLocation(String messageId) async {
     await ref.read(chatActionsProvider).stopLiveLocation(messageId);
-    ref.invalidate(messagesProvider(widget.chatId));
   }
 
   // Ek option ka button (gol icon + neeche naam)
@@ -623,24 +673,21 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
               ListTile(
                 leading: const Icon(Icons.delete_outline),
                 title: Text(isMine ? 'Delete for me' : 'Delete'),
-                onTap: () async {
+                onTap: () {
                   Navigator.pop(sheetContext);
                   AppHaptics.warning();
-                  await ref.read(chatActionsProvider).deleteForMe(msg.id);
-                  ref.invalidate(messagesProvider(widget.chatId));
+                  _deleteForMe(msg);
                 },
               ),
-              // Sirf apne message par, aur jo pehle se deleted na ho
               if (isMine && !isDeleted)
                 ListTile(
                   leading: const Icon(Icons.delete_forever, color: Colors.red),
                   title: const Text('Delete for everyone',
                       style: TextStyle(color: Colors.red)),
-                  onTap: () async {
+                  onTap: () {
                     Navigator.pop(sheetContext);
                     AppHaptics.warning();
-                    await ref.read(chatActionsProvider).deleteForEveryone(msg.id);
-                    ref.invalidate(messagesProvider(widget.chatId));
+                    _deleteForEveryone(msg);
                   },
                 ),
               const SizedBox(height: 8),
@@ -722,16 +769,35 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       messageId: msg.id,
       newContent: newText,
     );
-    ref.invalidate(messagesProvider(widget.chatId));
+  }
+  // Delete for me: hide instantly, server works in the background
+  Future<void> _deleteForMe(dynamic msg) async {
+    // 1) Hide right away so the UI feels instant
+    setState(() => _hiddenMessageIds.add(msg.id));
+
+    try {
+      // 2) The stream updates itself, so no invalidate is needed
+      await ref.read(chatActionsProvider).deleteForMe(msg.id);
+    } catch (e) {
+      // 3) Server failed: bring the message back and show the reason
+      if (!mounted) return;
+      setState(() => _hiddenMessageIds.remove(msg.id));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete message: $e')),
+      );
+    }
   }
 
-  Future<void> _deleteMessage(dynamic msg) async {
-    final confirmed = await AppDialogs.confirmDeleteMessage(context);
-    if (!confirmed || !mounted) return;
-
-    AppHaptics.warning();
-    await ref.read(chatActionsProvider).deleteForEveryone(msg.id); // or deleteForMe
-    ref.invalidate(messagesProvider(widget.chatId));
+  // Delete for everyone: the stream pushes the change to both devices
+  Future<void> _deleteForEveryone(dynamic msg) async {
+    try {
+      await ref.read(chatActionsProvider).deleteForEveryone(msg.id);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete message: $e')),
+      );
+    }
   }
 
   @override
@@ -760,6 +826,15 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     final headerName = liveChat?.otherUserName ?? widget.otherUserName;
     final headerAvatarUrl = liveChat?.avatarUrl;
     final hasHeaderAvatar = headerAvatarUrl != null && headerAvatarUrl.isNotEmpty;
+    // Online/offline status, only computed for 1-on-1 chats
+    final otherProfileAsync = widget.isGroup
+        ? null
+        : ref.watch(otherUserProfileProvider(widget.chatId));
+    final otherUserId = otherProfileAsync?.value?.id;
+    final lastSeen = otherUserId != null
+        ? ref.watch(userLastSeenProvider(otherUserId)).value
+        : null;
+    final statusText = formatOnlineStatus(lastSeen);
 
     return Scaffold(
       backgroundColor: p.chatBackground,
@@ -809,6 +884,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                 ),
               ),
               const SizedBox(width: 10),
+              // Header: chat ka naam (+ group members ki list)
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -822,6 +898,13 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                     if (widget.isGroup && groupMembersAsync != null && groupMembersAsync.hasValue)
                       Text(
                         groupMembersAsync.value!.values.join(', '),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        style: const TextStyle(fontSize: 12, color: Colors.white70),
+                      )
+                    else if (!widget.isGroup && statusText.isNotEmpty)
+                      Text(
+                        statusText,
                         overflow: TextOverflow.ellipsis,
                         maxLines: 1,
                         style: const TextStyle(fontSize: 12, color: Colors.white70),
@@ -935,7 +1018,10 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                       );
                     }
 
-                    List<dynamic> sortedMessages = List.from(messages);
+                    // Skip messages I just deleted for me
+                    List<dynamic> sortedMessages = messages
+                        .where((m) => !_hiddenMessageIds.contains(m.id))
+                        .toList();
                     sortedMessages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
                     Map<String, dynamic> messagesById = {for (var m in sortedMessages) m.id: m};
 
@@ -983,6 +1069,9 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                           onToggleSelect: () => _toggleMessageSelection(msg.id),
                           repliedMessage: msg.replyToId != null ? messagesById[msg.replyToId] : null,
                           onSwipeReply: () => setState(() => _replyingTo = msg),
+                          repliedSenderName: (msg.replyToId != null && messagesById[msg.replyToId] != null)
+                              ? _nameFor(messagesById[msg.replyToId])
+                              : null,
                         );
                       },
                     );
@@ -1000,7 +1089,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // NEW: reply preview bar
+                      // Reply preview bar (naam + message text)
                       if (_replyingTo != null)
                         Container(
                           color: p.surface,
@@ -1010,11 +1099,28 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                               Container(width: 3, height: 36, color: p.primary),
                               const SizedBox(width: 8),
                               Expanded(
-                                child: Text(
-                                  _replyingTo.content,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(fontSize: 13, color: p.textMain),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      _nameFor(_replyingTo),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: p.primary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      _replyingTo?.content ?? '',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(fontSize: 13, color: p.textMain),
+                                    ),
+                                  ],
                                 ),
                               ),
                               IconButton(
@@ -1136,6 +1242,10 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
         IconButton(
           icon: Icon(Icons.attach_file, color: p.primary),
           onPressed: _toggleAttachPanel,
+        ),
+        IconButton(
+          icon: const Icon(Icons.emoji_emotions_outlined, color: kHeaderColor),
+          onPressed: _openStickerPicker,
         ),
         Expanded(
           child: Container(
