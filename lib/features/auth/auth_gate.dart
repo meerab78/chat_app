@@ -1,6 +1,7 @@
 import 'package:chat_app/features/Base/main_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/notification/notification_service.dart';
 import '../Home/home_view.dart';
 import 'controller.dart';
 import 'forget_password/reset_password.dart';
@@ -17,11 +18,10 @@ class AuthGate extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // If the reset link did not work, tell the user why.
-    ref.listen<RecoveryState>(passwordRecoveryProvider, (previous, next) {
-      if (next.error != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(next.error!)),
-        );
+    ref.listen<AsyncValue<dynamic>>(sessionProvider, (previous, next) {
+      final session = next.value;
+      if (session != null) {
+        NotificationService.syncTokenForLoggedInUser();
       }
     });
 

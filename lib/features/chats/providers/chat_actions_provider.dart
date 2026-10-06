@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/notification/push_notifier.dart';
 import '../../Auto Clear Chat/auto_service.dart';
 
 class ChatActions {
@@ -24,7 +25,7 @@ class ChatActions {
     final publicUrl = supabase.storage.from('chat-media').getPublicUrl(storagePath);
     final expiresAt = await AutoClearService().calculateExpiry(chatId);
 
-    await supabase.from('messages').insert({
+    final inserted = await supabase.from('messages').insert({
       'chat_id': chatId,
       'sender_id': currentUserId,
       'message_type': 'file',
@@ -32,7 +33,9 @@ class ChatActions {
       'content': fileName, // shown as the file's display name
       'status': 'sent',
       'expires_at': expiresAt?.toIso8601String(),
-    });
+    }).select().single();
+
+    PushNotifier.notifyNewMessage(chatId: chatId, messageId: inserted['id'] as String);
   }
 
 // Send the current GPS location as a message (a Google Maps link)
@@ -58,7 +61,7 @@ class ChatActions {
 
     }
 
-    await supabase.from('messages').insert({
+    final inserted = await supabase.from('messages').insert({
       'chat_id': chatId,
       'sender_id': currentUserId,
       'message_type': 'location',
@@ -67,7 +70,9 @@ class ChatActions {
       'duration_seconds': durationSecondsToStore, // reusing this column for live-share length
       'status': 'sent',
       'expires_at': expiresAt?.toIso8601String(),
-    });
+    }).select().single();
+
+    PushNotifier.notifyNewMessage(chatId: chatId, messageId: inserted['id'] as String);
   }
 
   // Ends an active live location share before its time runs out
@@ -86,7 +91,7 @@ class ChatActions {
     final currentUserId = supabase.auth.currentUser!.id;
     final expiresAt = await AutoClearService().calculateExpiry(targetChatId);
 
-    await supabase.from('messages').insert({
+    final inserted = await supabase.from('messages').insert({
       'chat_id': targetChatId,
       'sender_id': currentUserId,
       'message_type': message.messageType,
@@ -95,7 +100,9 @@ class ChatActions {
       'duration_seconds': message.durationSeconds,
       'status': 'sent',
       'expires_at': expiresAt?.toIso8601String(),
-    });
+    }).select().single();
+
+    PushNotifier.notifyNewMessage(chatId: targetChatId, messageId: inserted['id'] as String);
   }
 
   // Renames a group (admin only — screen enforces this before calling)
@@ -268,15 +275,18 @@ class ChatActions {
     final currentUserId = supabase.auth.currentUser!.id;
     final expiresAt = await AutoClearService().calculateExpiry(chatId);
 
-    await supabase.from('messages').insert({
+    final inserted = await supabase.from('messages').insert({
       'chat_id': chatId,
       'sender_id': currentUserId,
       'content': content,
       'status': 'sent',
       'expires_at': expiresAt?.toIso8601String(),
       'reply_to_id': replyToId, // NEW
-    });
+    }).select().single();
+
+    PushNotifier.notifyNewMessage(chatId: chatId, messageId: inserted['id'] as String);
   }
+
 
   // Mark the other user's messages as 'read'
   Future<void> markMessagesAsRead(String chatId) async {
@@ -345,7 +355,7 @@ class ChatActions {
     final publicUrl = supabase.storage.from('chat-media').getPublicUrl(storagePath);
 
     // Save the message with type 'image' and the file's URL
-    await supabase.from('messages').insert({
+    final inserted = await supabase.from('messages').insert({
       'chat_id': chatId,
       'sender_id': currentUserId,
       'message_type': 'image',
@@ -353,7 +363,9 @@ class ChatActions {
       'content': (caption != null && caption.isNotEmpty) ? caption : '📷 Photo',
       'status': 'sent',
       'expires_at': expiresAt?.toIso8601String(),
-    });
+    }).select().single();
+
+    PushNotifier.notifyNewMessage(chatId: chatId, messageId: inserted['id'] as String);
   }
   // Sends a sticker picked from Giphy. We just save the sticker's image
   // URL — no upload needed, since Giphy hosts the image itself.
@@ -363,14 +375,16 @@ class ChatActions {
   }) async {
     final currentUserId = supabase.auth.currentUser!.id;
 
-    await supabase.from('messages').insert({
+    final inserted = await supabase.from('messages').insert({
       'chat_id': chatId,
       'sender_id': currentUserId,
       'message_type': 'sticker',
       'media_url': stickerImageUrl,
       'content': 'Sticker',
       'status': 'sent',
-    });
+    }).select().single();
+
+    PushNotifier.notifyNewMessage(chatId: chatId, messageId: inserted['id'] as String);
   }
   // Upload a voice recording to Supabase Storage and send it as a message
   Future<void> sendVoiceMessage({
@@ -396,7 +410,7 @@ class ChatActions {
     final publicUrl = supabase.storage.from('chat-media').getPublicUrl(storagePath);
 
     // Save the message with type 'voice', the file's URL, and its duration
-    await supabase.from('messages').insert({
+    final inserted = await supabase.from('messages').insert({
       'chat_id': chatId,
       'sender_id': currentUserId,
       'message_type': 'voice',
@@ -405,7 +419,9 @@ class ChatActions {
       'content': '$durationText',
       'status': 'sent',
       'expires_at': expiresAt?.toIso8601String(),
-    });
+    }).select().single();
+
+    PushNotifier.notifyNewMessage(chatId: chatId, messageId: inserted['id'] as String);
   }
   // Adds new people to an existing group, as regular (non-admin) members,
 // and posts "<name> was added to the group" for each of them

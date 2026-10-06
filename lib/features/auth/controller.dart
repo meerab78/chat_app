@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'
     show AuthException, Session;
 
+import '../../core/notification/notification_service.dart';
 import 'repository.dart';
 import '../chats/providers/chat_list_provider.dart'; // apna sahi relative path daal dein
 
@@ -132,12 +133,30 @@ class AuthController extends AsyncNotifier<void> {
   }
 
   Future<bool> signOut() async {
-    final success = await _run(_repo.signOut);
-    if (success) {
-      // Logged out -> clear cached chat list so next user doesn't see it
-      ref.invalidate(chatListProvider);
+    // Keep this autoDispose provider alive for the duration of this
+    // method, even if no widget is watching it right now — otherwise
+    // Riverpod can dispose it mid-way through the async work below
+    final keepAliveLink = ref.keepAlive();
+
+    try {
+      final repo = _repo;
+
+      // Must run BEFORE the actual sign-out, while the user is still
+      // authenticated, or the token-removal request will be rejected
+      await NotificationService.clearTokenOnLogout();
+
+      if (!ref.mounted) return false;
+
+      final success = await _run(repo.signOut);
+      if (success) {
+        // Logged out -> clear cached chat list so next user doesn't see it
+        ref.invalidate(chatListProvider);
+      }
+      return success;
+    } finally {
+      // Done — let Riverpod dispose this provider normally again
+      keepAliveLink.close();
     }
-    return success;
   }
 
   Future<bool> _run(Future<void> Function() work) async {

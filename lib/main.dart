@@ -4,6 +4,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'core/navigation/app_navigatior.dart';
+import 'core/notification/notification_service.dart';
 import 'core/theme/app_colors.dart';
 import 'core/theme/theme_provider.dart';
 import 'features/Shortcut/service.dart';
@@ -18,12 +20,15 @@ Future<void> main() async {
     anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
     authOptions: const FlutterAuthClientOptions(detectSessionInUri: false),
   );
+
+  // Must run AFTER Supabase.initialize (it may need the logged-in user)
+  await NotificationService.initialize();
+
+  // Handles the case where the app was fully closed and the user
+  // tapped Reply / Mark as read on a notification to open it
+  await NotificationService.handleLaunchAction();
   runApp(const ProviderScope(child: MyApp()));
 }
-
-// Needed so we can open a screen from outside any widget
-final navigatorKey = GlobalKey<NavigatorState>();
-
 class MyApp extends ConsumerStatefulWidget {
   const MyApp({super.key});
 
@@ -51,7 +56,7 @@ class _MyAppState extends ConsumerState<MyApp> {
     // Only open if the user is logged in
     if (Supabase.instance.client.auth.currentSession == null) return;
 
-    final nav = navigatorKey.currentState;
+    final nav = appNavigatorKey.currentState;
     if (nav == null) return;
 
     // Same lock rule as HomeView: ask for PIN if the chat is locked
@@ -89,7 +94,7 @@ class _MyAppState extends ConsumerState<MyApp> {
     final themeState = ref.watch(themeProvider);
 
     return MaterialApp(
-      navigatorKey: navigatorKey, // important
+      navigatorKey: appNavigatorKey, // important
       debugShowCheckedModeBanner: false,
       title: 'Chat App',
       theme: themeState.preset.toThemeData(),

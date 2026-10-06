@@ -55,6 +55,9 @@ dependencies:
   flutter_secure_storage: ^11.2.0
   crypto: ^3.0.7
   enough_giphy_flutter: ^0.4.2
+  firebase_messaging: ^16.4.1
+  firebase_core: ^4.11.0
+  flutter_local_notifications: ^22.0.1
 
 dev_dependencies:
   flutter_test:
