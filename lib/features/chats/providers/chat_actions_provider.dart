@@ -1,9 +1,7 @@
 import 'dart:io';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
-
 import '../../../core/notification/push_notifier.dart';
 import '../../Auto Clear Chat/auto_service.dart';
 
@@ -154,40 +152,6 @@ class ChatActions {
         .eq('chat_id', chatId)
         .eq('user_id', currentUserId);
   }
-  // Adds new people to an existing group (admin only — screen enforces this)
-  // Future<void> addGroupMembers({
-  //   required String chatId,
-  //   required List<String> userIds,
-  // }) async {
-  //   if (userIds.isEmpty) return;
-  //
-  //   // People who already have a row (they left earlier) -> just re-activate
-  //   final existing = await supabase
-  //       .from('chat_members')
-  //       .select('user_id')
-  //       .eq('chat_id', chatId)
-  //       .inFilter('user_id', userIds);
-  //   final existingIds =
-  //   (existing as List).map((r) => r['user_id'] as String).toSet();
-  //
-  //   if (existingIds.isNotEmpty) {
-  //     await supabase
-  //         .from('chat_members')
-  //         .update({'left_at': null})
-  //         .eq('chat_id', chatId)
-  //         .inFilter('user_id', existingIds.toList());
-  //   }
-  //
-  //   // Everyone else gets a brand new row
-  //   final newIds = userIds.where((id) => !existingIds.contains(id)).toList();
-  //   if (newIds.isNotEmpty) {
-  //     await supabase.from('chat_members').insert(
-  //       newIds.map((id) => {'chat_id': chatId, 'user_id': id}).toList(),
-  //     );
-  //   }
-  // }
-
-  // Find an existing 1-on-1 chat between two users, or create a new one
   Future<String> getOrCreateChat(String otherUserId) async {
     final currentUserId = supabase.auth.currentUser!.id;
 
@@ -513,6 +477,4 @@ class ChatActions {
     });
   }
 }
-
-
 final chatActionsProvider = Provider<ChatActions>((ref) => ChatActions());

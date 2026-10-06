@@ -11,13 +11,6 @@ import 'edit_profile_screen.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
-
-  Future<void> _logout(BuildContext context, WidgetRef ref) async {
-    final confirmed = await AppDialogs.confirmLogout(context);
-    if (!confirmed) return;
-    ref.read(authControllerProvider.notifier).signOut();
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profileAsync = ref.watch(myProfileProvider);
@@ -40,30 +33,9 @@ class ProfileScreen extends ConsumerWidget {
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Profile',
-                          style: TextStyle(fontSize: 23, fontWeight: FontWeight.bold),
-                        ),
-                        TextButton.icon(
-                          onPressed: () => _logout(context, ref),
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            minimumSize: const Size(0, 0),
-                          ),
-                          icon: const Icon(Icons.logout, size: 16, color: Colors.red),
-                          label: const Text(
-                            'Logout',
-                            style: TextStyle(
-                              color: Colors.red,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
-                      ],
+                    child: const Text(
+                      'Profile',
+                      style: TextStyle(fontSize: 23, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),

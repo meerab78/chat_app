@@ -2,10 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/theme_provider.dart';
 import '../../../../core/theme/app_theme_presets.dart';
+import '../../../../core/utils/app_dialogs.dart';
 import '../../controller.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
+
+  Future<void> _logout(BuildContext context, WidgetRef ref) async {
+    // Step 1: user se confirm karo
+    final confirmed = await AppDialogs.confirmLogout(context);
+    if (!confirmed) return;
+
+    // Step 2: sign out karo
+    ref.read(authControllerProvider.notifier).signOut();
+
+    // Step 3: Settings screen pushed hai, isliye saari screens band kar do
+    if (!context.mounted) return;
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -40,7 +54,6 @@ class SettingsScreen extends ConsumerWidget {
               final isSelected = themeState.presetIndex == index;
 
               return GestureDetector(
-                // Save the theme and apply it to the whole app
                 onTap: () => notifier.setPreset(index),
                 child: Column(
                   children: [
@@ -48,7 +61,7 @@ class SettingsScreen extends ConsumerWidget {
                       width: 72,
                       height: 72,
                       decoration: BoxDecoration(
-                        color: option.background, // preview of the theme background
+                        color: option.background,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
                           color: isSelected ? option.primary : option.divider,
@@ -75,6 +88,80 @@ class SettingsScreen extends ConsumerWidget {
               );
             }),
           ),
+
+          const SizedBox(height: 40),
+
+          // ---- Account section ----
+          Text(
+            'Account',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+              color: preset.textMain,
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // ---- Logout button ----
+          Material(
+            color: Colors.red.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(18),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(18),
+              onTap: () => _logout(context, ref),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: Colors.red.withOpacity(0.25)),
+                ),
+                child: Row(
+                  children: [
+                    // Red circle icon
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.logout, color: Colors.red, size: 20),
+                    ),
+                    const SizedBox(width: 14),
+
+                    // Title + small text
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Logout',
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15.5,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Sign out of your account',
+                            style: TextStyle(color: preset.textGrey, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    Icon(
+                      Icons.chevron_right,
+                      color: Colors.red.withOpacity(0.6),
+                      size: 22,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
         ],
       ),
     );
