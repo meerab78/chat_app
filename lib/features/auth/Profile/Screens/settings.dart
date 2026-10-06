@@ -9,14 +9,13 @@ class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   Future<void> _logout(BuildContext context, WidgetRef ref) async {
-    // Step 1: user se confirm karo
+
     final confirmed = await AppDialogs.confirmLogout(context);
     if (!confirmed) return;
 
-    // Step 2: sign out karo
     ref.read(authControllerProvider.notifier).signOut();
 
-    // Step 3: Settings screen pushed hai, isliye saari screens band kar do
+
     if (!context.mounted) return;
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
