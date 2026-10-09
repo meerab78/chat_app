@@ -30,6 +30,25 @@ class _EnterPinScreenState extends ConsumerState<EnterPinScreen> {
   final _pinController = TextEditingController();
   String? _error;
   bool _isChecking = false;
+  bool _isPassword = false; // true when this chat is locked with a password
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLockType();
+  }
+
+  // Finds out if this chat uses a PIN or a password, so we show the right keyboard
+  Future<void> _loadLockType() async {
+    try {
+      final type =
+      await ref.read(chatLockProvider.notifier).getLockType(widget.chatId);
+      if (!mounted) return;
+      setState(() => _isPassword = type == 'password');
+    } catch (e) {
+      // If this fails we simply keep the normal PIN screen
+    }
+  }
 
   @override
   void dispose() {
@@ -39,7 +58,12 @@ class _EnterPinScreenState extends ConsumerState<EnterPinScreen> {
 
   Future<void> _verify() async {
     final pin = _pinController.text.trim();
-    if (pin.length != 4) {
+    if (_isPassword) {
+      if (pin.isEmpty) {
+        setState(() => _error = 'Enter your password');
+        return;
+      }
+    } else if (pin.length != 4) {
       setState(() => _error = 'Enter your 4-digit PIN');
       return;
     }
@@ -89,16 +113,21 @@ class _EnterPinScreenState extends ConsumerState<EnterPinScreen> {
                 AuthHeader(
                   title: widget.title,
                   showBackButton: true,
-                  subtitle: widget.subtitle,
+                  subtitle: _isPassword
+                      ? widget.subtitle.replaceAll('PIN', 'password')
+                      : widget.subtitle,
                 ),
                 CustomTextField(
                   controller: _pinController,
-                  hintText: 'Enter PIN',
+                  hintText: _isPassword ? 'Enter password' : 'Enter PIN',
                   prefixIcon: Icons.lock_outline,
                   obscureText: true,
-                  keyboardType: TextInputType.number,
+                  keyboardType:
+                  _isPassword ? TextInputType.text : TextInputType.number,
                   textInputAction: TextInputAction.done,
-                  inputFormatters: [
+                  inputFormatters: _isPassword
+                      ? <TextInputFormatter>[]
+                      : <TextInputFormatter>[
                     FilteringTextInputFormatter.digitsOnly,
                     LengthLimitingTextInputFormatter(4),
                   ],

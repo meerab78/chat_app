@@ -7,6 +7,8 @@ import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../core/shared/widgets/avatar_viewer_screen.dart';
+import '../../../core/utils/app_animations.dart';
+import '../../../core/utils/page_transitions.dart';
 import '../../auth/Profile/other_user_profile_provider.dart';
 import '../providers/message_provider.dart';
 import 'full_screen_image.dart';
@@ -57,12 +59,7 @@ class ContactInfoScreen extends ConsumerWidget {
                           onTap: avatarUrl != null
                               ? () => Navigator.push(
                             context,
-                            MaterialPageRoute(
-                              builder: (_) => AvatarViewerScreen(
-                                imageUrl: avatarUrl,
-                                title: name,
-                              ),
-                            ),
+                              PageTransitions.fadeTransition(AvatarViewerScreen(imageUrl: avatarUrl, title: name))
                           )
                               : null,
                           child: Container(
@@ -122,7 +119,7 @@ class ContactInfoScreen extends ConsumerWidget {
                   padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                    children: <Widget>[
                       if (profile.bio != null && profile.bio!.isNotEmpty) ...[
                         _InfoCard(
                           icon: Icons.info_outline,
@@ -195,22 +192,27 @@ class ContactInfoScreen extends ConsumerWidget {
                                       ),
                                       itemBuilder: (context, index) {
                                         final msg = imageMessages[index];
-                                        return GestureDetector(
+                                        return PressScale(
                                           onTap: () => Navigator.push(
                                             context,
-                                            MaterialPageRoute(
-                                              builder: (_) => FullscreenImageScreen(
+                                            PageTransitions.fadeTransition(
+                                              FullscreenImageScreen(
                                                 imageUrl: msg.mediaUrl,
+                                                heroTag: 'img_${msg.id}',
                                               ),
                                             ),
                                           ),
-                                          child: ClipRRect(
-                                            borderRadius: BorderRadius.circular(8),
-                                            child: Image.network(
-                                              msg.mediaUrl,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (context, error, stack) =>
-                                                  Container(color: p.surface),
+                                          child: Hero(
+                                            tag: 'img_${msg.id}',
+                                            child: ClipRRect(
+                                              borderRadius: BorderRadius.circular(8),
+                                              child: Image.network(
+                                                msg.mediaUrl,
+                                                fit: BoxFit.cover,
+                                                loadingBuilder: (context, child, progress) =>
+                                                progress == null ? child : const ShimmerBox(height: 100),
+                                                errorBuilder: (context, error, stack) => Container(color: p.surface),
+                                              ),
                                             ),
                                           ),
                                         );

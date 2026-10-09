@@ -25,11 +25,15 @@ class ChatLockService {
     return rows.map((r) => r['chat_id'] as String).toSet();
   }
 
-  // Sets the PIN (or changes it if the chat is already locked)
-  Future<void> saveLock(String chatId, String pin) async {
+  // Sets the secret (or changes it if the chat is already locked).
+  // type is 'pin' or 'password'.
+  Future<void> saveLock(String chatId, String secret, {String type = 'pin'}) async {
     await _db
         .from('chat_members')
-        .update({'lock_pin_hash': _hash(pin, chatId)})
+        .update({
+      'lock_pin_hash': _hash(secret, chatId),
+      'lock_type': type,
+    })
         .eq('chat_id', chatId)
         .eq('user_id', _userId);
   }
@@ -47,8 +51,20 @@ class ChatLockService {
   Future<void> deleteLock(String chatId) async {
     await _db
         .from('chat_members')
-        .update({'lock_pin_hash': null})
+        .update({'lock_pin_hash': null, 'lock_type': null})
         .eq('chat_id', chatId)
         .eq('user_id', _userId);
+  }
+  // Returns 'pin' or 'password'. Old locks have no type, so they count as 'pin'
+  Future<String> getLockType(String chatId) async {
+    final row = await _db
+        .from('chat_members')
+        .select('lock_type')
+        .eq('chat_id', chatId)
+        .eq('user_id', _userId)
+        .maybeSingle();
+
+    if (row == null || row['lock_type'] == null) return 'pin';
+    return row['lock_type'] as String;
   }
 }

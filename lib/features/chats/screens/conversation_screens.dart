@@ -11,8 +11,10 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/shared/widgets/avatar_viewer_screen.dart';
 import '../../../core/theme/theme_provider.dart';
+import '../../../core/utils/app_animations.dart';
 import '../../../core/utils/app_dialogs.dart';
 import '../../../core/utils/app_haptics.dart';
+import '../../../core/utils/page_transitions.dart';
 import '../../Auto Clear Chat/provider.dart';
 import '../../Auto Clear Chat/widget/auto_clear_sheet.dart';
 import '../../Home/home_view.dart';
@@ -58,6 +60,9 @@ class ConversationScreen extends ConsumerStatefulWidget {
 
 class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   final TextEditingController _messageController = TextEditingController();
+  // Used to animate only NEW messages (not old ones when scrolling)
+  final Set<String> _seenMessageIds = {};
+  bool _firstLoadDone = false;
   bool _isSending = false;
   bool _showAttachPanel = false; // controls the smooth attach panel
   Timer? _autoClearTimer;
@@ -70,10 +75,15 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   static const int _maxFileBytes = 5 * 1024 * 1024; // 5 MB
   String get _currentUserId => Supabase.instance.client.auth.currentUser!.id;
   dynamic _replyingTo; // the message currently being replied to, or null
-
+  final ScrollController _scrollController = ScrollController();
+  bool _showScrollDown = false;
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(() {
+      final show = _scrollController.offset > 300;
+      if (show != _showScrollDown) setState(() => _showScrollDown = show);
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(chatActionsProvider).markMessagesAsRead(widget.chatId);
     });
@@ -96,6 +106,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     _autoClearTimer?.cancel();
     _messageController.dispose();
     _heartbeatTimer?.cancel();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -132,22 +143,11 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
 
   // Opens the Group Info screen (only used for group chats)
   void _openGroupInfo() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => GroupInfoScreen(chatId: widget.chatId),
-      ),
-    );
-  }
+Navigator.push(context, PageTransitions.slideFromRight(GroupInfoScreen(chatId: widget.chatId)));}
 
   // NEW: Opens the Contact Info screen (only used for 1-on-1 chats)
   void _openContactInfo() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ContactInfoScreen(chatId: widget.chatId),
-      ),
-    );
+    Navigator.push(context, PageTransitions.slideFromRight(ContactInfoScreen(chatId: widget.chatId)));
   }
 
   Future<void> _forwardSelectedMessages() async {
@@ -161,9 +161,8 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
 
     final targetChatId = await Navigator.push<String>(
       context,
-      MaterialPageRoute(builder: (_) => const ForwardScreen()),
+      PageTransitions.slideFromBottom<String>(const ForwardScreen()),
     );
-
     if (targetChatId == null || !mounted) return;
 
     for (final msg in selectedMessages) {
@@ -233,11 +232,15 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   // Called when user presses and holds the mic button
   Future<void> _startVoiceRecording() async {
     final started = await ref.read(voiceRecorderProvider.notifier).start();
-    AppHaptics.error();
-    if (!started && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Mic permission denied or failed to start')),
-      );
+    if (started) {
+      AppHaptics.recordStart();
+    } else {
+      AppHaptics.error();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Mic permission denied or failed to start')),
+        );
+      }
     }
   }
 
@@ -310,9 +313,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     // Show preview screen first, wait for the caption (or null if cancelled)
     final caption = await Navigator.push<String>(
       context,
-      MaterialPageRoute(
-        builder: (_) => ImagePreviewScreen(imageFile: imageFile),
-      ),
+      PageTransitions.fadeTransition<String>(ImagePreviewScreen(imageFile: imageFile)),
     );
 
     // If user pressed back instead of send, caption will be null -> do nothing
@@ -1030,7 +1031,9 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
           Column(
             children: [
               Expanded(
-                child: messagesAsync.when(
+                child: Stack(
+                 children: [
+      messagesAsync.when(
                   data: (messages) {
                     // NEW: I left this group -> show a note instead of messages
                     if (hasLeft) {
@@ -1043,8 +1046,10 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                     }
 
                     if (messages.isEmpty) {
-                      return const Center(
-                        child: Text('Say hi 👋', style: TextStyle(color: Colors.grey)),
+                      return Center(
+                        child: BounceIn(
+                          child: const Text('Say hi 👋', style: TextStyle(color: Colors.grey, fontSize: 18)),
+                        ),
                       );
                     }
 
@@ -1059,8 +1064,13 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                     if (groupMembersAsync != null && groupMembersAsync.hasValue) {
                       memberNames = groupMembersAsync.value!;
                     }
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      _seenMessageIds.addAll(sortedMessages.map<String>((m) => m.id as String));
+                      _firstLoadDone = true;
+                    });
 
                     return ListView.builder(
+                      controller: _scrollController,
                       reverse: true,
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       itemCount: sortedMessages.length,
@@ -1079,38 +1089,43 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                         if (widget.isGroup && !isMe) {
                           senderName = memberNames[msg.senderId];
                         }
-
+                        final bool isNew = _firstLoadDone && !_seenMessageIds.contains(msg.id);
                         // message bubble style is untouched, only the screen
                         // around it has been polished
-                        return MessageBubble(
+                        return FadeSlideIn(
                           key: ValueKey(msg.id),
-                          text: msg.content,
-                          time: msg.createdAt,
-                          isMe: isMe,
-                          status: msg.status,
-                          senderName: senderName,
-                          messageType: msg.messageType,
-                          mediaUrl: msg.mediaUrl,
-                          durationSeconds: msg.durationSeconds,
-                          onStopLiveLocation: isMe ? () => _stopLiveLocation(msg.id) : null,
-                          onLongPress: () => _showMessageOptions(msg),
-                          selectionMode: _isSelectionMode,
-                          isSelected: _selectedMessageIds.contains(msg.id),
-                          onToggleSelect: () => _toggleMessageSelection(msg.id),
-                          repliedMessage: msg.replyToId != null ? messagesById[msg.replyToId] : null,
-                          onSwipeReply: () => setState(() => _replyingTo = msg),
-                          repliedSenderName: (msg.replyToId != null && messagesById[msg.replyToId] != null)
-                              ? _nameFor(messagesById[msg.replyToId])
-                              : null,
+                          enabled: isNew,
+                          child: MessageBubble(
+                            key: ValueKey(msg.id),
+                            text: msg.content,
+                            time: msg.createdAt,
+                            isMe: isMe,
+                            status: msg.status,
+                            senderName: senderName,
+                            messageType: msg.messageType,
+                            mediaUrl: msg.mediaUrl,
+                            durationSeconds: msg.durationSeconds,
+                            onStopLiveLocation: isMe ? () => _stopLiveLocation(msg.id) : null,
+                            onLongPress: () => _showMessageOptions(msg),
+                            selectionMode: _isSelectionMode,
+                            isSelected: _selectedMessageIds.contains(msg.id),
+                            onToggleSelect: () => _toggleMessageSelection(msg.id),
+                            repliedMessage: msg.replyToId != null ? messagesById[msg.replyToId] : null,
+                            onSwipeReply: () => setState(() => _replyingTo = msg),
+                            repliedSenderName: (msg.replyToId != null && messagesById[msg.replyToId] != null)
+                                ? _nameFor(messagesById[msg.replyToId])
+                                : null,
+                          ),
                         );
                       },
                     );
                   },
-                  loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const _ChatSkeleton(),
                   error: (err, stack) => Center(child: Text('Error: $err')),
                 ),
+    ]
               ),
-              // ---- Input bar ----
+              ),              // ---- Input bar ----
               if (hasLeft)
                 _buildLeftBanner()
               else
@@ -1120,45 +1135,50 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       // Reply preview bar (naam + message text)
-                      if (_replyingTo != null)
-                        Container(
-                          color: p.surface,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          child: Row(
-                            children: [
-                              Container(width: 3, height: 36, color: p.primary),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      _nameFor(_replyingTo),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w700,
-                                        color: p.primary,
+                        AnimatedSize(
+    duration: const Duration(milliseconds: 200),
+    curve: Curves.easeOut,
+    child: _replyingTo != null
+                          ?Container(
+                            color: p.surface,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            child: Row(
+                              children: [
+                                Container(width: 3, height: 36, color: p.primary),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        _nameFor(_replyingTo),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: p.primary,
+                                        ),
                                       ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      _replyingTo?.content ?? '',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(fontSize: 13, color: p.textMain),
-                                    ),
-                                  ],
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        _replyingTo?.content ?? '',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(fontSize: 13, color: p.textMain),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.close, size: 18),
-                                onPressed: () => setState(() => _replyingTo = null),
-                              ),
-                            ],
-                          ),
+                                IconButton(
+                                  icon: const Icon(Icons.close, size: 18),
+                                  onPressed: () => setState(() => _replyingTo = null),
+                                ),
+                              ],
+                            ),
+                          )
+        : const SizedBox(width: double.infinity),
                         ),
                       // Attach panel smoothly grows above the input bar
                       AnimatedSize(
@@ -1173,6 +1193,18 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                       Stack(
                         clipBehavior: Clip.none,
                         children: [
+                          Positioned(
+                            right: 12,
+                            bottom: 12,
+                            child: ScrollToBottomButton(
+                              visible: _showScrollDown,
+                              onTap: () => _scrollController.animateTo(
+                                0, // list is reversed, so 0 = latest message
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeOut,
+                              ),
+                            ),
+                          ),
                           Container(
                             width: double.infinity,
                             color: p.surface,
@@ -1242,7 +1274,11 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       child: Row(
         children: [
           const SizedBox(width: 8),
-          const Icon(Icons.mic, color: Colors.red, size: 22),
+          const Pulse(
+            minScale: 0.85,
+            maxScale: 1.1,
+            child: Icon(Icons.mic, color: Colors.red, size: 22),
+          ),
           const SizedBox(width: 8),
           timerText,
           const Expanded(
@@ -1305,38 +1341,28 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
 
   // Right side button: send (locked / typed text) or mic
   Widget _buildRightButton(VoiceRecorderState recorder) {
-    final p = ref.read(themeProvider).preset;
-    // Locked recording: send button
-    if (recorder.isRecording && recorder.isLocked) {
-      return CircleAvatar(
+    // Send is shown when: locked recording, or text typed (and not recording)
+    final bool showSend = recorder.isRecording
+        ? recorder.isLocked
+        : _messageController.text.trim().isNotEmpty;
+
+    return SendMicSwitcher(
+      showSend: showSend,
+      sendButton: CircleAvatar(
         radius: 22,
         backgroundColor: kAccentColor,
         child: IconButton(
           icon: const Icon(Icons.send, color: Colors.white, size: 20),
-          onPressed: _stopVoiceRecording,
+          onPressed: recorder.isRecording ? _stopVoiceRecording : _sendMessage,
         ),
-      );
-    }
-
-    // Text typed: normal send button
-    if (!recorder.isRecording && _messageController.text.trim().isNotEmpty) {
-      return CircleAvatar(
-        radius: 22,
-        backgroundColor: kAccentColor,
-        child: IconButton(
-          icon: const Icon(Icons.send, color: Colors.white, size: 20),
-          onPressed: _sendMessage,
-        ),
-      );
-    }
-
-    // Otherwise: mic button with hold / lock / cancel gestures
-    return VoiceMicButton(
-      isRecording: recorder.isRecording,
-      onStart: _startVoiceRecording,
-      onLock: _lockVoiceRecording,
-      onCancel: _cancelVoiceRecording,
-      onSend: _stopVoiceRecording,
+      ),
+      micButton: VoiceMicButton(
+        isRecording: recorder.isRecording,
+        onStart: _startVoiceRecording,
+        onLock: _lockVoiceRecording,
+        onCancel: _cancelVoiceRecording,
+        onSend: _stopVoiceRecording,
+      ),
     );
   }
 
@@ -1399,6 +1425,37 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
           Icon(Icons.keyboard_arrow_up, size: 20, color: Colors.grey),
         ],
       ),
+    );
+  }
+}
+// Loading skeleton for the message list (replaces the spinner)
+class _ChatSkeleton extends StatelessWidget {
+  const _ChatSkeleton();
+
+  // Different bubble widths so it looks like a real chat
+  static const List<double> _widths = [180, 120, 220, 150, 200, 100, 240, 160];
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      reverse: true, // newest at the bottom, like the real list
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      itemCount: _widths.length,
+      itemBuilder: (context, index) {
+        final bool isMe = index % 3 == 1; // some bubbles on the right
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          child: Align(
+            alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+            child: ShimmerBox(
+              width: _widths[index],
+              height: index % 4 == 0 ? 56 : 38,
+              borderRadius: 16,
+            ),
+          ),
+        );
+      },
     );
   }
 }

@@ -6,6 +6,7 @@ import '../../../../core/shared/widgets/custom_button.dart';
 import '../../../../core/shared/widgets/custom_text_field.dart';
 import '../../../../core/shared/widgets/avatar_viewer_screen.dart';
 import '../../../../core/theme/theme_provider.dart';
+import '../../../../core/utils/page_transitions.dart';
 import '../../widget/auth_header.dart';
 import '../provider.dart';
 
@@ -40,8 +41,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     if (avatarUrl == null) return;
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => AvatarViewerScreen(
+      PageTransitions.fadeTransition(
+        AvatarViewerScreen(
           imageUrl: avatarUrl,
           title: _nameController.text,
         ),

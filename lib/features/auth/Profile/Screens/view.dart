@@ -1,9 +1,13 @@
+import 'package:chat_app/core/utils/app_animations.dart';
 import 'package:chat_app/features/auth/Profile/Screens/settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/theme_provider.dart';
 import '../../../../core/utils/app_dialogs.dart'; // adjust path if different
+import '../../../../core/utils/app_haptics.dart';
+import '../../../../core/utils/page_transitions.dart';
+import '../../../chat lock/screens/manage_lock_view.dart';
 import '../../controller.dart'; // adjust path to where authControllerProvider is defined
 import '../provider.dart';
 import 'change_password.dart';
@@ -44,73 +48,76 @@ class ProfileScreen extends ConsumerWidget {
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-                    child: Column(
-                      children: [
-                        InkWell(
-                          borderRadius: BorderRadius.circular(60),
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const EditProfileScreen()),
-                          ),
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(3),
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: headerColor.withOpacity(0.25), width: 2),
-                                ),
-                                child: CircleAvatar(
-                                  radius: 46,
-                                  backgroundColor: headerColor.withOpacity(0.12),
-                                  backgroundImage:
-                                  avatarUrl != null ? NetworkImage(avatarUrl) : null,
-                                  child: avatarUrl == null
-                                      ? Text(
-                                    name.isNotEmpty ? name[0].toUpperCase() : '?',
-                                    style: TextStyle(
-                                      fontSize: 34,
-                                      fontWeight: FontWeight.bold,
-                                      color: headerColor,
-                                    ),
-                                  )
-                                      : null,
-                                ),
-                              ),
-                              // Pencil badge, sitting on the bottom-right of the avatar
-                              Positioned(
-                                right: 0,
-                                bottom: 0,
-                                child: Container(
-                                  width: 30,
-                                  height: 30,
-                                  decoration: BoxDecoration(
-                                    color: headerColor,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: Theme.of(context).scaffoldBackgroundColor,
-                                      width: 2.5,
-                                    ),
-                                  ),
-                                  child: const Icon(Icons.edit, size: 14, color: Colors.white),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
+                    child: FadeSlideIn(
 
-                        Text(
-                          name,
-                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          email,
-                          style: TextStyle(color: p.textGrey, fontSize: 13.5),
-                        ),
-                      ],
+                      child: Column(
+                        children: [
+                          InkWell(
+                            borderRadius: BorderRadius.circular(60),
+                            onTap: () => Navigator.push(
+                              context,
+                              PageTransitions.slideFromRight(const EditProfileScreen()),
+                            ),
+                            child: Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(3),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: headerColor.withOpacity(0.25), width: 2),
+                                  ),
+                                  child: CircleAvatar(
+                                    radius: 46,
+                                    backgroundColor: headerColor.withOpacity(0.12),
+                                    backgroundImage:
+                                    avatarUrl != null ? NetworkImage(avatarUrl) : null,
+                                    child: avatarUrl == null
+                                        ? Text(
+                                      name.isNotEmpty ? name[0].toUpperCase() : '?',
+                                      style: TextStyle(
+                                        fontSize: 34,
+                                        fontWeight: FontWeight.bold,
+                                        color: headerColor,
+                                      ),
+                                    )
+                                        : null,
+                                  ),
+                                ),
+                                // Pencil badge, sitting on the bottom-right of the avatar
+                                Positioned(
+                                  right: 0,
+                                  bottom: 0,
+                                  child: Container(
+                                    width: 30,
+                                    height: 30,
+                                    decoration: BoxDecoration(
+                                      color: headerColor,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Theme.of(context).scaffoldBackgroundColor,
+                                        width: 2.5,
+                                      ),
+                                    ),
+                                    child: const Icon(Icons.edit, size: 14, color: Colors.white),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          Text(
+                            name,
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            email,
+                            style: TextStyle(color: p.textGrey, fontSize: 13.5),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -135,51 +142,64 @@ class ProfileScreen extends ConsumerWidget {
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: p.surface,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.06),
-                            blurRadius: 16,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        children: [
-                          _SettingsTile(
-                            icon: Icons.person_outline,
-                            title: 'Profile settings',
-                            iconColor: headerColor,
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const EditProfileScreen()),
+                    child: FadeSlideIn(
+                         offsetY: 30,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: p.surface,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.06),
+                              blurRadius: 16,
+                              offset: const Offset(0, 4),
                             ),
-                          ),
-                          const _TileDivider(),
-                          _SettingsTile(
-                            icon: Icons.lock_outline,
-                            title: 'Privacy',
-                            iconColor: Colors.orange.shade700,
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const ChangePasswordScreen()),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            _SettingsTile(
+                              icon: Icons.person_outline,
+                              title: 'Edit Profile',
+                              iconColor: headerColor,
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const EditProfileScreen()),
+                              ),
                             ),
-                          ),
-                          const _TileDivider(),
-                          _SettingsTile(
-                            icon: Icons.settings_outlined,
-                            title: 'Settings',
-                            iconColor: Colors.blueGrey.shade600,
-                            isLast: true,
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                            const _TileDivider(),
+                            _SettingsTile(
+                              icon: Icons.lock_outline,
+                              title: 'Change Password',
+                              iconColor: Colors.orange.shade700,
+                              onTap: () => Navigator.push(
+                                context,
+                                  PageTransitions.slideFromRight(const ChangePasswordScreen())
+                              ),
                             ),
-                          ),
-                        ],
+                            const _TileDivider(),
+                            _SettingsTile(
+                              icon: Icons.shield_outlined,
+                              title: 'Manage Lock',
+                              iconColor: Colors.teal.shade600,
+                              onTap: () => Navigator.push(
+                                context,
+                                  PageTransitions.slideFromRight(const ManageLockScreen())
+                              ),
+                            ),
+                            const _TileDivider(),
+                            _SettingsTile(
+                              icon: Icons.settings_outlined,
+                              title: 'Settings',
+                              iconColor: Colors.blueGrey.shade600,
+                              isLast: true,
+                              onTap: () => Navigator.push(
+                                context,
+                                  PageTransitions.slideFromRight(const SettingsScreen())
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -224,7 +244,10 @@ class _SettingsTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: onTap,
+      onTap: () {
+        AppHaptics.tap(); // NEW
+        onTap();
+      },
       borderRadius: BorderRadius.vertical(
         top: const Radius.circular(20),
         bottom: isLast ? const Radius.circular(20) : Radius.zero,

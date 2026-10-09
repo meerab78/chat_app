@@ -75,7 +75,36 @@ class ChatLockNotifier extends Notifier<ChatLockState> {
   Future<bool> verifyPin(String chatId, String pin) {
     return _service.verifyPin(chatId, pin);
   }
+  // Locks many chats with the same PIN/password (used by Manage Lock)
+  Future<void> lockManyChats(
+      List<String> chatIds, String secret, String type) async {
+    final updated = Set<String>.from(state.lockedChatIds);
+    for (final chatId in chatIds) {
+      await _service.saveLock(chatId, secret, type: type);
+      updated.add(chatId);
+    }
+    state = state.copyWith(lockedChatIds: updated);
+  }
 
+  // Removes the lock from many chats at once
+  Future<void> removeManyLocks(List<String> chatIds) async {
+    final updatedLocked = Set<String>.from(state.lockedChatIds);
+    final updatedUnlocked = Map<String, DateTime>.from(state.unlockedUntil);
+    for (final chatId in chatIds) {
+      await _service.deleteLock(chatId);
+      updatedLocked.remove(chatId);
+      updatedUnlocked.remove(chatId);
+    }
+    state = state.copyWith(
+      lockedChatIds: updatedLocked,
+      unlockedUntil: updatedUnlocked,
+    );
+  }
+
+  // 'pin' or 'password'
+  Future<String> getLockType(String chatId) {
+    return _service.getLockType(chatId);
+  }
   // Called after the user enters the correct PIN for a specific chat
   void markUnlocked(String chatId) {
     final updated = Map<String, DateTime>.from(state.unlockedUntil);

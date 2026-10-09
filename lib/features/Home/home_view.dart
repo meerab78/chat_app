@@ -3,7 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/shared/widgets/chat_tile.dart';
 import '../../core/theme/theme_provider.dart';
+import '../../core/utils/app_animations.dart';
 import '../../core/utils/app_dialogs.dart';
+import '../../core/utils/app_haptics.dart';
+import '../../core/utils/page_transitions.dart';
 import '../../core/utils/time_formatter.dart';
 import '../Shortcut/service.dart';
 import '../chat lock/provider.dart';
@@ -59,8 +62,8 @@ class _HomeViewState extends ConsumerState<HomeView> {
     if (isLocked && !ref.read(chatLockProvider.notifier).isUnlockedNow(chat.id)) {
       final success = await Navigator.push<bool>(
         context,
-        MaterialPageRoute(
-          builder: (_) => EnterPinScreen(
+        PageTransitions.slideFromBottom<bool>(
+          EnterPinScreen(
             chatId: chat.id,
             title: 'Locked Chat',
             subtitle: 'Enter your PIN to open this chat.',
@@ -74,8 +77,8 @@ class _HomeViewState extends ConsumerState<HomeView> {
 
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => ConversationScreen(
+      PageTransitions.slideFromRight(
+        ConversationScreen(
           chatId: chat.id,
           otherUserName: name,
           isGroup: chat.isGroup,
@@ -195,7 +198,10 @@ class _HomeViewState extends ConsumerState<HomeView> {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
+        onTap: () {
+          AppHaptics.tap(); // NEW
+          onTap();
+        },
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
           child: Row(
@@ -257,8 +263,8 @@ class _HomeViewState extends ConsumerState<HomeView> {
     if (isLocked) {
       final success = await Navigator.push<bool>(
         context,
-        MaterialPageRoute(
-          builder: (_) => EnterPinScreen(
+        PageTransitions.slideFromBottom<bool>(
+          EnterPinScreen(
             chatId: chat.id,
             title: 'Unlock Chat',
             subtitle: 'Enter the PIN to remove the lock on this chat.',
@@ -267,17 +273,17 @@ class _HomeViewState extends ConsumerState<HomeView> {
       );
       if (success == true) {
         await notifier.removeLock(chat.id);
+        AppHaptics.medium();
       }
       return;
     }
 
-    // Set a PIN for this chat. The lock is saved inside SetPinScreen.
     final created = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(builder: (_) => SetPinScreen(chatId: chat.id)),
+      PageTransitions.slideFromBottom<bool>(SetPinScreen(chatId: chat.id)),
     );
     if (created != true) return;
-
+    AppHaptics.lock();
     if (context.mounted) {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Chat locked')));
@@ -291,7 +297,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
 
     final confirmed = await AppDialogs.confirmDeleteChat(context, name);
     if (!confirmed || !context.mounted) return;
-
+    AppHaptics.warning();
     try {
       await ref.read(chatActionsProvider).clearChatForMe(chat.id);
       ref.invalidate(chatListProvider);
@@ -393,7 +399,10 @@ class _HomeViewState extends ConsumerState<HomeView> {
                       chat.isGroup ? Colors.teal : avatarColorFor(name),
                       avatarUrl: chat.avatarUrl,
                       onTap: () => _handleChatTap(context, ref, chat, name, isLocked),
-                      onLongPress: () => _showChatOptionsSheet(context, ref, chat, isLocked),
+                      onLongPress: () {
+                        AppHaptics.medium(); // NEW
+                        _showChatOptionsSheet(context, ref, chat, isLocked);
+                      },
                     ),
                   );
                 },
@@ -404,15 +413,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
         ];
       },
       loading: () => <Widget>[
-        SliverFillRemaining(
-          hasScrollBody: false,
-          child: Center(
-            child: CircularProgressIndicator(
-              strokeWidth: 3,
-              color: p.primary,
-            ),
-          ),
-        ),
+        const SliverToBoxAdapter(child: _ChatListSkeleton()),
       ],
       error: (err, stack) => <Widget>[
         SliverFillRemaining(
@@ -431,17 +432,20 @@ class _HomeViewState extends ConsumerState<HomeView> {
       },
       child: Scaffold(
         backgroundColor: p.surface,
-        floatingActionButton: FloatingActionButton(
-          backgroundColor: p.accent,
-          elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const NewChatScreen()),
-            );
-          },
-          child: const Icon(Icons.add_rounded, color: Colors.white, size: 30),
+        floatingActionButton: BounceIn(
+          child: FloatingActionButton(
+            backgroundColor: p.accent,
+            elevation: 2,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            onPressed: () {
+              AppHaptics.light();
+              Navigator.push(
+                context,
+                PageTransitions.slideFromRight(const NewChatScreen()),
+              );
+            },
+            child: const Icon(Icons.add_rounded, color: Colors.white, size: 30),
+          ),
         ),
         body: CustomScrollView(
           physics: const BouncingScrollPhysics(),
@@ -459,6 +463,35 @@ class _HomeViewState extends ConsumerState<HomeView> {
           ],
         ),
       ),
+    );
+  }
+}
+// Loading skeleton for the chat list (replaces the spinner)
+class _ChatListSkeleton extends StatelessWidget {
+  const _ChatListSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: List.generate(8, (i) {
+        return const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              ShimmerBox(width: 52, height: 52, borderRadius: 26),
+              SizedBox(width: 14),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ShimmerBox(width: 140, height: 14),
+                  SizedBox(height: 8),
+                  ShimmerBox(width: 220, height: 12),
+                ],
+              ),
+            ],
+          ),
+        );
+      }),
     );
   }
 }

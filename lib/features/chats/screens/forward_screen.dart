@@ -1,7 +1,9 @@
+import 'package:chat_app/core/utils/app_animations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/theme_provider.dart';
+import '../../../core/utils/app_haptics.dart';
 import '../providers/all_users_provider.dart';
 import '../providers/chat_actions_provider.dart';
 
@@ -137,51 +139,55 @@ class _ForwardScreenState extends ConsumerState<ForwardScreen> {
                           final user = filtered[index];
                           final avatarColor = _colorForName(user.name);
 
-                          return Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              onTap: () => _onUserTap(user),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                child: Row(
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 22,
-                                      backgroundColor: avatarColor.withOpacity(0.15),
-                                      child: Text(
-                                        user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
-                                        style: TextStyle(
-                                          color: avatarColor,
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 16,
+                          return FadeSlideIn(
+                            enabled: index < 8, // only first rows animate
+                            duration: Duration(milliseconds: 250 + index * 40),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () => _onUserTap(user),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                  child: Row(
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 22,
+                                        backgroundColor: avatarColor.withOpacity(0.15),
+                                        child: Text(
+                                          user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                                          style: TextStyle(
+                                            color: avatarColor,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 16,
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                    const SizedBox(width: 14),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            user.name,
-                                            style: TextStyle(
-                                              color: p.textMain,
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: 15,
+                                      const SizedBox(width: 14),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              user.name,
+                                              style: TextStyle(
+                                                color: p.textMain,
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 15,
+                                              ),
                                             ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            user.email,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(color: p.textGrey, fontSize: 12.5),
-                                          ),
-                                        ],
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              user.email,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(color: p.textGrey, fontSize: 12.5),
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                    Icon(Icons.chevron_right, color: p.icon, size: 20),
-                                  ],
+                                      Icon(Icons.chevron_right, color: p.icon, size: 20),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
@@ -203,6 +209,7 @@ class _ForwardScreenState extends ConsumerState<ForwardScreen> {
   }
 
   Future<void> _onUserTap(dynamic user) async {
+    AppHaptics.tap();
     if (_isForwarding) return; // block double-tap while already forwarding
     setState(() => _isForwarding = true);
 
