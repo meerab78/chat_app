@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/notification/notification_service.dart';
 import '../Home/home_view.dart';
+import '../callings/calling_bootstrap.dart';
 import 'controller.dart';
 import 'forget_password/reset_password.dart';
 import 'signin/view.dart';
@@ -22,6 +23,9 @@ class AuthGate extends ConsumerWidget {
       final session = next.value;
       if (session != null) {
         NotificationService.syncTokenForLoggedInUser();
+        CallingBootstrap.start(ref); // calling ready for this user
+      } else {
+        CallingBootstrap.stop(ref); // logged out
       }
     });
 

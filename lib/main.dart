@@ -6,10 +6,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/navigation/app_navigatior.dart';
 import 'core/notification/notification_service.dart';
+import 'core/services/call_notification_service.dart';
 import 'core/theme/app_colors.dart';
 import 'core/theme/theme_provider.dart';
 import 'features/Shortcut/service.dart';
 import 'features/auth/auth_gate.dart';
+import 'features/callings/views/call_listener.dart';
 import 'features/chat lock/provider.dart';
 import 'features/chat lock/screens/enter_pin_view.dart';
 import 'features/chats/screens/conversation_screens.dart';
@@ -23,6 +25,9 @@ Future<void> main() async {
 
   // Must run AFTER Supabase.initialize (it may need the logged-in user)
   await NotificationService.initialize();
+  // Listens to the system call screen (Accept / Decline) from the very start,
+  // so a tap made while the app was closed is not lost.
+  await CallNotificationService.instance.start();
 
   // Handles the case where the app was fully closed and the user
   // tapped Reply / Mark as read on a notification to open it
@@ -97,6 +102,11 @@ class _MyAppState extends ConsumerState<MyApp> {
       navigatorKey: appNavigatorKey, // important
       debugShowCheckedModeBanner: false,
       title: 'Chat App',
+      // Opens the call screen on ANY page when a call starts / arrives.
+      builder: (context, child) => CallListener(
+        navigatorKey: appNavigatorKey,
+        child: child ?? const SizedBox.shrink(),
+      ),
       theme: themeState.preset.toThemeData(),
       home: const AuthGate(),
     );

@@ -18,6 +18,8 @@ import '../../Auto Clear Chat/widget/auto_clear_sheet.dart';
 import '../../Home/home_view.dart';
 import '../../auth/Profile/online_status_provider.dart';
 import '../../auth/Profile/other_user_profile_provider.dart';
+import '../../callings/controller/controller.dart';
+import '../../callings/model/calling_model.dart';
 import '../../chat lock/provider.dart';
 import '../../chat lock/screens/enter_pin_view.dart';
 import '../../chat lock/screens/set_pin_view.dart';
@@ -179,7 +181,20 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       );
     }
   }
-
+  // Starts an audio / video call with the other person of this 1-on-1 chat
+  Future<void> _startCall(String peerId, String peerName, CallType type) async {
+    final error = await ref.read(callControllerProvider.notifier).initiateCall(
+      receiverId: peerId,
+      channelId: widget.chatId,
+      type: type,
+      receiverName: peerName,
+    );
+    if (error != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error)),
+      );
+    }
+  }
   // AppBar shown while messages are selected for forwarding
   PreferredSizeWidget _buildSelectionAppBar() {
     final p = ref.read(themeProvider).preset;
@@ -916,6 +931,21 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
           ),
         ),
         actions: [
+          // Call buttons: only for 1-on-1 chats (not groups)
+          if (!widget.isGroup && otherUserId != null) ...[
+            IconButton(
+              tooltip: 'Audio call',
+              icon: const Icon(Icons.call, color: Colors.white),
+              onPressed: () =>
+                  _startCall(otherUserId, headerName, CallType.audio),
+            ),
+            IconButton(
+              tooltip: 'Video call',
+              icon: const Icon(Icons.videocam, color: Colors.white),
+              onPressed: () =>
+                  _startCall(otherUserId, headerName, CallType.video),
+            ),
+          ],
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, color: Colors.white),
             onSelected: (value) {
