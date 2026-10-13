@@ -9,6 +9,7 @@ import '../../core/utils/app_haptics.dart';
 import '../../core/utils/page_transitions.dart';
 import '../../core/utils/time_formatter.dart';
 import '../Shortcut/service.dart';
+import '../ai_chatbot/ai_chat_launcher.dart';
 import '../chat lock/provider.dart';
 import '../chat lock/screens/enter_pin_view.dart';
 import '../chat lock/screens/set_pin_view.dart';
@@ -16,7 +17,6 @@ import '../chats/providers/chat_actions_provider.dart';
 import '../chats/providers/chat_list_provider.dart';
 import '../chats/providers/chat_list_refresh_provider.dart';
 import '../chats/screens/conversation_screens.dart';
-import '../chats/screens/create_group_screen.dart';
 import '../chats/screens/new_chat_screen.dart';
 
 const Color kAccentColor = Color(0xFF25D366);
@@ -43,7 +43,6 @@ class HomeView extends ConsumerStatefulWidget {
 }
 
 class _HomeViewState extends ConsumerState<HomeView> {
-  // Sirf UI ke liye: search text
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
 
@@ -199,7 +198,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
         onTap: () {
-          AppHaptics.tap(); // NEW
+          AppHaptics.tap();
           onTap();
         },
         child: Padding(
@@ -337,7 +336,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
           ];
         }
 
-        // Local search (provider ko touch nahi karta)
+        // Local search
         final String q = _query.trim().toLowerCase();
         final visible = chats.where((c) {
           final String n =
@@ -370,14 +369,12 @@ class _HomeViewState extends ConsumerState<HomeView> {
                   final chat = visible[idx];
                   final name = chat.otherUserName ?? 'Unknown';
                   final isLocked = ref.watch(chatLockProvider).lockedChatIds.contains(chat.id);
-
-                  // Swipe left = delete (long press bhi pehle jaisa chalega)
                   return Dismissible(
                     key: ValueKey('chat_${chat.id}'),
                     direction: DismissDirection.endToStart,
                     confirmDismiss: (_) async {
                       await _deleteChat(context, ref, chat);
-                      return false; // list provider refresh karega
+                      return false;
                     },
                     background: Container(
                       color: Colors.red.shade400,
@@ -400,7 +397,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
                       avatarUrl: chat.avatarUrl,
                       onTap: () => _handleChatTap(context, ref, chat, name, isLocked),
                       onLongPress: () {
-                        AppHaptics.medium(); // NEW
+                        AppHaptics.medium();
                         _showChatOptionsSheet(context, ref, chat, isLocked);
                       },
                     ),
@@ -459,6 +456,17 @@ class _HomeViewState extends ConsumerState<HomeView> {
                 onChanged: (v) => setState(() => _query = v),
               ),
             ),
+            if (!chatsAsync.isLoading &&
+                (_query.trim().isEmpty ||
+                    'ai chat'.contains(_query.trim().toLowerCase())))
+              const SliverToBoxAdapter(
+                child: Column(
+                  children: [
+                    AiChatTile(),
+                    ChatDivider(),
+                  ],
+                ),
+              ),
             ...chatSlivers,
           ],
         ),

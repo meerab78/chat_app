@@ -1,7 +1,7 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:get_storage/get_storage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/navigation/app_navigatior.dart';
@@ -15,7 +15,10 @@ import 'features/callings/views/call_listener.dart';
 import 'features/chat lock/provider.dart';
 import 'features/chat lock/screens/enter_pin_view.dart';
 import 'features/chats/screens/conversation_screens.dart';
+
 Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await GetStorage.init();
   await dotenv.load(fileName: ".env");
   await Supabase.initialize(
     url: dotenv.env['SUPABASE_URL']!,
@@ -34,6 +37,7 @@ Future<void> main() async {
   await NotificationService.handleLaunchAction();
   runApp(const ProviderScope(child: MyApp()));
 }
+
 class MyApp extends ConsumerStatefulWidget {
   const MyApp({super.key});
 

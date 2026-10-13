@@ -12,7 +12,7 @@ class ChatUi {
   static const Color accent = Color(0xFF25D366);
   static const Color accentDark = Color(0xFF075E54);
 
-  static Widget sliverHeader(String title) {
+  static Widget sliverHeader(String title, {List<Widget>? actions}) {
     // Consumer lets this static method read the selected theme
     return Consumer(
       builder: (context, ref, _) {
@@ -20,6 +20,9 @@ class ChatUi {
 
         return SliverAppBar(
           pinned: true,
+          centerTitle: false,
+          titleSpacing: 20,
+          toolbarHeight: 60,
           backgroundColor: p.surface,
           surfaceTintColor: Colors.transparent,
           elevation: 0,
@@ -28,22 +31,19 @@ class ChatUi {
           systemOverlayStyle: p.brightness == Brightness.dark
               ? SystemUiOverlayStyle.light
               : SystemUiOverlayStyle.dark,
-          toolbarHeight: 48,
-          expandedHeight: 68, // pehle 96 tha, isi se upar ka space kam hua
-          flexibleSpace: FlexibleSpaceBar(
-            expandedTitleScale: 1.35,
-            titlePadding:
-            const EdgeInsetsDirectional.only(start: 20, bottom: 10),
-            title: Text(
-              title,
-              style: TextStyle(
-                color: p.textMain,
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.6,
-              ),
+          title: Text(
+            title,
+            style: TextStyle(
+              color: p.textMain,
+              fontSize: 30,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.8,
             ),
           ),
+          actions: [
+            ...?actions,
+            const SizedBox(width: 8),
+          ],
         );
       },
     );
@@ -105,7 +105,7 @@ class ChatSearchField extends ConsumerWidget {
   }
 }
 
-// ---------- Filter chips ----------
+//  Filter chips
 class ChatFilterChips extends ConsumerWidget {
   final List<String> labels;
   final int selected;
@@ -157,7 +157,7 @@ class ChatFilterChips extends ConsumerWidget {
   }
 }
 
-// ---------- Chat tile ----------
+//  Chat tile
 class ChatTile extends ConsumerWidget {
   final String name;
   final String? lastMessage;
@@ -166,7 +166,7 @@ class ChatTile extends ConsumerWidget {
   final bool isGroup;
   final String? avatarUrl;
   final Color avatarColor;
-  final int index; // sirf halki entry animation ke liye
+  final int index;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
 
@@ -207,8 +207,6 @@ class ChatTile extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           child: Row(
             children: [
-              // Avatar (unread ho to green ring)
-              // Avatar (unread ho to green ring) — tap karne se sirf photo view hoti hai
               GestureDetector(
                 onTap: hasAvatar
                     ? () => Navigator.push(
@@ -355,7 +353,7 @@ class ChatDivider extends ConsumerWidget {
   }
 }
 
-// ---------- Empty / Error ----------
+// Empty / Error
 class ChatEmptyState extends ConsumerWidget {
   final IconData icon;
   final String title;
